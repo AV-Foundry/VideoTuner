@@ -38,6 +38,7 @@ def run_nuitka() -> Path:
         "-m",
         "nuitka",
         "--onefile",
+        "--assume-yes-for-downloads",  # Auto-accept dependency downloads in CI
         f"--output-dir={DIST_DIR}",
         "--output-filename=VideoTuner.exe",
         # Compile as a package run with -m (uses __main__.py automatically)
