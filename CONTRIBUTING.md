@@ -106,8 +106,12 @@ Before creating an issue:
 1. **Fork and branch:** Create a feature branch from `main`
 
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout -b feat/your-feature-name
    ```
+
+   Branch names must follow the convention: `<type>/<description>`
+
+   Valid types: `feat/`, `fix/`, `docs/`, `style/`, `refactor/`, `test/`, `chore/`
 
 2. **Make your changes:**
    - Follow the existing code style and conventions
