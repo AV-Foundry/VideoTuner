@@ -226,8 +226,13 @@ def calculate_autocrop_values(
     abs_cache_file = resolve_absolute_path(cache_file, cwd)
     end_frame = start_frame + num_frames
 
-    log.debug("Calculating autocrop values: vpy=%s, source=%s, frames=%d-%d",
-              vpy_path, abs_source_path, start_frame, end_frame)
+    log.debug(
+        "Calculating autocrop values: vpy=%s, source=%s, frames=%d-%d",
+        vpy_path,
+        abs_source_path,
+        start_frame,
+        end_frame,
+    )
 
     # Build VapourSynth script that calculates and prints crop values
     vpy_content = f"""import vapoursynth as vs
@@ -324,7 +329,9 @@ except Exception as e:
             raise RuntimeError("Failed to parse crop values from VapourSynth output")
 
         left, right, top, bottom = parsed
-        log.debug("AutoCrop values calculated: L=%d R=%d T=%d B=%d", left, right, top, bottom)
+        log.debug(
+            "AutoCrop values calculated: L=%d R=%d T=%d B=%d", left, right, top, bottom
+        )
 
         return CropValues(left=left, right=right, top=top, bottom=bottom)
 

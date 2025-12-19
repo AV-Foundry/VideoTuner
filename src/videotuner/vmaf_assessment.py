@@ -11,7 +11,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, cast, TYPE_CHECKING
 
-from .media import VideoInfo, parse_video_info, get_bit_depth_from_pix_fmt, get_assessment_frame_count
+from .media import (
+    VideoInfo,
+    parse_video_info,
+    get_bit_depth_from_pix_fmt,
+    get_assessment_frame_count,
+)
 from .tool_parsers import get_float
 from .utils import run, make_relative_path
 from .constants import (
@@ -509,7 +514,9 @@ def run_vmaf(
             frame_scores=tuple(frame_scores),
         )
     except FileNotFoundError as e:
-        log.error("Failed to parse VMAF JSON (%s): File not found. Error: %s", log_path, e)
+        log.error(
+            "Failed to parse VMAF JSON (%s): File not found. Error: %s", log_path, e
+        )
         return VMAFResult(
             mean=float("nan"),
             harmonic_mean=float("nan"),
@@ -546,8 +553,12 @@ def assess_with_vmaf(
     If model_spec is None, automatically selects the appropriate model based on
     the distorted video's resolution.
     """
-    ref_info = parse_video_info(ref_path, ffprobe_bin=ffprobe_bin, log_hdr_metadata=False)
-    dis_info = parse_video_info(dis_path, ffprobe_bin=ffprobe_bin, log_hdr_metadata=False)
+    ref_info = parse_video_info(
+        ref_path, ffprobe_bin=ffprobe_bin, log_hdr_metadata=False
+    )
+    dis_info = parse_video_info(
+        dis_path, ffprobe_bin=ffprobe_bin, log_hdr_metadata=False
+    )
     return run_vmaf(
         ffmpeg_bin=ffmpeg_bin,
         ref_path=ref_path,

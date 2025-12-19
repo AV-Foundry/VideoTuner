@@ -59,7 +59,10 @@ class TestCalculateMetricParams:
             vmaf_region_frames=500,
         )
         # Use cast since calculate_metric_params only needs usable_frames and args
-        ctx = cast(IterationContext, cast(object, SimpleNamespace(usable_frames=9000, args=args)))
+        ctx = cast(
+            IterationContext,
+            cast(object, SimpleNamespace(usable_frames=9000, args=args)),
+        )
 
         params = calculate_metric_params(ctx, "vmaf")
 
@@ -79,7 +82,10 @@ class TestCalculateMetricParams:
             ssim2_interval_frames=2000,
             ssim2_region_frames=300,
         )
-        ctx = cast(IterationContext, cast(object, SimpleNamespace(usable_frames=9000, args=args)))
+        ctx = cast(
+            IterationContext,
+            cast(object, SimpleNamespace(usable_frames=9000, args=args)),
+        )
 
         params = calculate_metric_params(ctx, "ssim2")
 
@@ -99,7 +105,10 @@ class TestCalculateMetricParams:
             vmaf_interval_frames=500,
             vmaf_region_frames=300,
         )
-        ctx = cast(IterationContext, cast(object, SimpleNamespace(usable_frames=400, args=args)))
+        ctx = cast(
+            IterationContext,
+            cast(object, SimpleNamespace(usable_frames=400, args=args)),
+        )
 
         params = calculate_metric_params(ctx, "vmaf")
 

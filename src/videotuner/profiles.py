@@ -277,7 +277,9 @@ class Profile:
         # 2. Add user-configurable parameters from profile settings
         is_hdr = video_format != VideoFormat.SDR
 
-        logger.debug("Building x265 params: video_format=%s, is_hdr=%s", video_format, is_hdr)
+        logger.debug(
+            "Building x265 params: video_format=%s, is_hdr=%s", video_format, is_hdr
+        )
 
         for key, value in self.settings.items():
             # Skip preset (handled separately in command building)
@@ -374,7 +376,9 @@ class Profile:
 
 
 # Keys to exclude from Pass 1 settings (they only apply to later passes)
-_PASS1_EXCLUDED_KEYS = frozenset(("multi-pass-opt-analysis", "multi-pass-opt-distortion"))
+_PASS1_EXCLUDED_KEYS = frozenset(
+    ("multi-pass-opt-analysis", "multi-pass-opt-distortion")
+)
 
 
 def create_multipass_profile(base_profile: "Profile", pass_num: int) -> "Profile":
@@ -522,7 +526,9 @@ def load_profiles(profile_file: Path | None = None) -> dict[str, Profile]:
         # Validate groups are strings
         # Create profile
         try:
-            profile = Profile(name=name, description=description, settings=settings, groups=groups)
+            profile = Profile(
+                name=name, description=description, settings=settings, groups=groups
+            )
             profiles[name] = profile
         except ProfileError as e:
             raise ProfileError(f"Invalid profile '{name}': {e}")
@@ -571,7 +577,9 @@ def get_profile(profiles: dict[str, Profile], name: str) -> Profile:
     """
     if name not in profiles:
         available = ", ".join(profiles.keys())
-        raise ProfileError(f"Profile '{name}' not found.\nAvailable profiles: {available}")
+        raise ProfileError(
+            f"Profile '{name}' not found.\nAvailable profiles: {available}"
+        )
 
     return profiles[name]
 
@@ -604,8 +612,12 @@ def validate_groups_exist(profiles: dict[str, Profile], groups: list[str]) -> No
     available_groups = get_all_groups(profiles)
     for group in groups:
         if group not in available_groups:
-            available = ", ".join(sorted(available_groups)) if available_groups else "(none)"
-            raise ProfileError(f"Profile group '{group}' not found.\nAvailable groups: {available}")
+            available = (
+                ", ".join(sorted(available_groups)) if available_groups else "(none)"
+            )
+            raise ProfileError(
+                f"Profile group '{group}' not found.\nAvailable groups: {available}"
+            )
 
 
 def validate_profile_and_group_names(profiles: dict[str, Profile]) -> None:

@@ -359,7 +359,8 @@ def parse_master_display_metadata(primaries_str: str, luminance_str: str) -> str
         if primaries_str not in COLOR_SPACE_COORDS:
             logger.warning(
                 "Unknown color space '%s'. Supported: %s",
-                primaries_str, list(COLOR_SPACE_COORDS.keys())
+                primaries_str,
+                list(COLOR_SPACE_COORDS.keys()),
             )
             return None
 

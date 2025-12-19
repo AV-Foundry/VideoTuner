@@ -65,9 +65,7 @@ def _parse_video_summary(text: str) -> SSIM2Result | None:
                 p95 = float(match.group(1))
             continue
         if low.startswith("std dev"):
-            match = re.search(
-                rf"std dev\s*:\s*({FLOAT_PATTERN})", low, re.IGNORECASE
-            )
+            match = re.search(rf"std dev\s*:\s*({FLOAT_PATTERN})", low, re.IGNORECASE)
             if match:
                 std_dev = float(match.group(1))
             continue

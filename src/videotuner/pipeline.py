@@ -14,7 +14,13 @@ from .create_encodes import (
 )
 from .encoding_utils import CropValues, VapourSynthEnv
 from .pipeline_iteration import run_single_crf_iteration, run_single_bitrate_iteration
-from .pipeline_cli import PipelineArgs, build_arg_parser, parse_cli, validate_args, get_default
+from .pipeline_cli import (
+    PipelineArgs,
+    build_arg_parser,
+    parse_cli,
+    validate_args,
+    get_default,
+)
 from .pipeline_types import get_reference_dir
 from .pipeline_display import (
     display_settings_summary,
@@ -105,7 +111,9 @@ def run_pipeline(args: PipelineArgs) -> int:
     )
 
     # Display active settings summary
-    display_settings_summary(display.console, args, multi_profile_display, input_path.name)
+    display_settings_summary(
+        display.console, args, multi_profile_display, input_path.name
+    )
 
     # Warn about ignored arguments when using bitrate profiles
     bitrate_profile_names = [p.name for p in multi_profile_list if p.is_bitrate_mode]
@@ -508,7 +516,9 @@ def run_pipeline(args: PipelineArgs) -> int:
         # selected_profile is guaranteed when not in multi-profile search mode
         assert selected_profile is not None
         log.info("\n=== Running Assessment Only ===")
-        log.info("%s: %s", selected_profile.display_label, selected_profile.display_name)
+        log.info(
+            "%s: %s", selected_profile.display_label, selected_profile.display_name
+        )
 
         # Create iteration context
         ctx = IterationContext(
@@ -609,7 +619,9 @@ def run_pipeline(args: PipelineArgs) -> int:
         ] = {}  # Track CRF -> predicted bitrate
 
         log.info("\n=== Starting CRF Search ===")
-        log.info("%s: %s", selected_profile.display_label, selected_profile.display_name)
+        log.info(
+            "%s: %s", selected_profile.display_label, selected_profile.display_name
+        )
         log.info("Targets:")
         for target in targets:
             log.info("  %s >= %.2f", target.metric_name, target.target_value)

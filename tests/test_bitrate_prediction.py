@@ -100,7 +100,10 @@ class TestCalculatePredictedBitrate:
                     return stats
 
             def mock_parse_video_info(
-                path: Path | str, *, ffprobe_bin: str = "ffprobe", log_hdr_metadata: bool = True
+                path: Path | str,
+                *,
+                ffprobe_bin: str = "ffprobe",
+                log_hdr_metadata: bool = True,
             ) -> MagicMock:
                 _ = ffprobe_bin  # Intentionally unused in mock
                 _ = log_hdr_metadata  # Intentionally unused in mock
@@ -229,7 +232,9 @@ class TestCalculatePredictedBitrate:
                     "videotuner.pipeline_iteration.get_encode_stats",
                     return_value=mock_stats,
                 ),
-                patch("videotuner.pipeline_iteration.parse_video_info", return_value=None),
+                patch(
+                    "videotuner.pipeline_iteration.parse_video_info", return_value=None
+                ),
             ):
                 logger = logging.getLogger("test")
                 result = calculate_predicted_bitrate(
@@ -258,7 +263,10 @@ class TestCalculatePredictedBitrate:
                 return stats
 
             def mock_parse_video_info(
-                path: Path | str, *, ffprobe_bin: str = "ffprobe", log_hdr_metadata: bool = True
+                path: Path | str,
+                *,
+                ffprobe_bin: str = "ffprobe",
+                log_hdr_metadata: bool = True,
             ) -> MagicMock | None:
                 _ = ffprobe_bin  # Intentionally unused in mock
                 _ = log_hdr_metadata  # Intentionally unused in mock
@@ -360,5 +368,7 @@ class TestCalculatePredictedBitrate:
                     vmaf_path, ffprobe_bin="/custom/path/to/ffprobe"
                 )
                 mock_parse.assert_called_once_with(
-                    vmaf_path, ffprobe_bin="/custom/path/to/ffprobe", log_hdr_metadata=False
+                    vmaf_path,
+                    ffprobe_bin="/custom/path/to/ffprobe",
+                    log_hdr_metadata=False,
                 )

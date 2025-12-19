@@ -184,6 +184,7 @@ def create_temp_encode_paths(
     """
     if temp_dir:
         from .utils import ensure_dir
+
         _ = ensure_dir(temp_dir)
         vpy_path = temp_dir / f"{name}.vpy"
         hevc_path = temp_dir / f"{name}.hevc"
@@ -258,8 +259,16 @@ class VapourSynthEnv:
         Returns:
             VapourSynthEnv with all paths resolved.
         """
-        vs_dir = vs_dir_arg if vs_dir_arg is not None else repo_root / VAPOURSYNTH_PORTABLE_DIR
-        vs_plugin_dir = vs_plugin_dir_arg if vs_plugin_dir_arg is not None else vs_dir / "vs-plugins"
+        vs_dir = (
+            vs_dir_arg
+            if vs_dir_arg is not None
+            else repo_root / VAPOURSYNTH_PORTABLE_DIR
+        )
+        vs_plugin_dir = (
+            vs_plugin_dir_arg
+            if vs_plugin_dir_arg is not None
+            else vs_dir / "vs-plugins"
+        )
         return cls(
             vs_dir=vs_dir,
             vs_plugin_dir=vs_plugin_dir,

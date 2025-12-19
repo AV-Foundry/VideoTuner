@@ -223,7 +223,9 @@ def calculate_predicted_bitrate(
         stats = get_encode_stats(vmaf_distorted_path, ffprobe_bin=ffprobe_bin)
         if stats:
             # Get duration from the file itself
-            info = parse_video_info(vmaf_distorted_path, ffprobe_bin=ffprobe_bin, log_hdr_metadata=False)
+            info = parse_video_info(
+                vmaf_distorted_path, ffprobe_bin=ffprobe_bin, log_hdr_metadata=False
+            )
             if info and info.duration:
                 bitrates.append((stats.bitrate_kbps, info.duration))
                 log.debug(
@@ -236,7 +238,9 @@ def calculate_predicted_bitrate(
         stats = get_encode_stats(ssim2_distorted_path, ffprobe_bin=ffprobe_bin)
         if stats:
             # Get duration from the file itself
-            info = parse_video_info(ssim2_distorted_path, ffprobe_bin=ffprobe_bin, log_hdr_metadata=False)
+            info = parse_video_info(
+                ssim2_distorted_path, ffprobe_bin=ffprobe_bin, log_hdr_metadata=False
+            )
             if info and info.duration:
                 bitrates.append((stats.bitrate_kbps, info.duration))
                 log.debug(
@@ -532,8 +536,13 @@ def run_single_bitrate_iteration(
     pass_num = profile.pass_number or 1
     bitrate_kbps = profile.bitrate or 0
 
-    ctx.log.debug("Bitrate iteration: profile=%s, bitrate=%s kbps, pass=%s, iteration=%s",
-                   profile.name, bitrate_kbps, pass_num, iteration)
+    ctx.log.debug(
+        "Bitrate iteration: profile=%s, bitrate=%s kbps, pass=%s, iteration=%s",
+        profile.name,
+        bitrate_kbps,
+        pass_num,
+        iteration,
+    )
 
     log_section(ctx.log, f"Encoding (Bitrate {bitrate_kbps} kbps, Pass {pass_num})")
 
@@ -579,8 +588,13 @@ def run_single_bitrate_iteration(
             / f"vmaf_distorted_bitrate{bitrate_kbps}_iter{iteration}.mkv"
         )
 
-        ctx.log.debug("VMAF encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
-                      bitrate_kbps, is_multipass, pass_num, vmaf_params.total_frames)
+        ctx.log.debug(
+            "VMAF encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
+            bitrate_kbps,
+            is_multipass,
+            pass_num,
+            vmaf_params.total_frames,
+        )
 
         try:
             vmaf_distorted_path = _encode_bitrate_metric(
@@ -603,6 +617,7 @@ def run_single_bitrate_iteration(
             raise
         except Exception as e:
             import traceback
+
             ctx.log.error("VMAF encoding failed: %s", e)
             ctx.log.debug("Traceback:\n%s", traceback.format_exc())
             ctx.args.vmaf = False
@@ -617,8 +632,13 @@ def run_single_bitrate_iteration(
             / f"ssim2_distorted_bitrate{bitrate_kbps}_iter{iteration}.mkv"
         )
 
-        ctx.log.debug("SSIM2 encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
-                      bitrate_kbps, is_multipass, pass_num, ssim2_params.total_frames)
+        ctx.log.debug(
+            "SSIM2 encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
+            bitrate_kbps,
+            is_multipass,
+            pass_num,
+            ssim2_params.total_frames,
+        )
 
         try:
             ssim2_distorted_path = _encode_bitrate_metric(
@@ -641,6 +661,7 @@ def run_single_bitrate_iteration(
             raise
         except Exception as e:
             import traceback
+
             ctx.log.error("SSIM2 encoding failed: %s", e)
             ctx.log.debug("Traceback:\n%s", traceback.format_exc())
             ctx.args.ssim2 = False

@@ -272,15 +272,11 @@ class TestVapourSynthEnv:
         cwd = Path("C:/project")
         env = VapourSynthEnv.from_cwd(cwd)
         assert env.vs_dir == Path("C:/project/vapoursynth-portable")
-        assert env.vsscript_dll == Path(
-            "C:/project/vapoursynth-portable/VSScript.dll"
-        )
+        assert env.vsscript_dll == Path("C:/project/vapoursynth-portable/VSScript.dll")
         assert env.ffms2_dll == Path(
             "C:/project/vapoursynth-portable/vs-plugins/ffms2.dll"
         )
-        assert env.vs_plugin_dir == Path(
-            "C:/project/vapoursynth-portable/vs-plugins"
-        )
+        assert env.vs_plugin_dir == Path("C:/project/vapoursynth-portable/vs-plugins")
 
     def test_from_args_uses_provided_paths(self):
         """Test from_args uses CLI-provided paths."""

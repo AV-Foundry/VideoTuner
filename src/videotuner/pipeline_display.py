@@ -164,7 +164,9 @@ def display_settings_summary(
 
     # Log bitrate warning if specified
     if args.predicted_bitrate_warning_percent is not None:
-        console.print(f"  Bitrate Warning: {args.predicted_bitrate_warning_percent:.0f}%")
+        console.print(
+            f"  Bitrate Warning: {args.predicted_bitrate_warning_percent:.0f}%"
+        )
 
     # Log quality targets if specified
     target_parts: list[str] = []
@@ -451,7 +453,9 @@ def display_multi_profile_results(
     # Add columns: Metric name + one column per profile
     table.add_column("Metric", style="white", min_width=18)
     for rank, result in enumerate(results, 1):
-        is_winner = rank == 1 and has_crf_profiles  # Only highlight winner for CRF profiles
+        is_winner = (
+            rank == 1 and has_crf_profiles
+        )  # Only highlight winner for CRF profiles
         profile_header = f"#{rank} {result.profile_name}"
         if is_winner:
             table.add_column(
