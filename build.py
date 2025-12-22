@@ -95,6 +95,7 @@ def verify_checksum(file_path: Path, expected_hash: str, name: str) -> None:
         print("This could indicate a compromised or corrupted download.")
         sys.exit(1)
 
+
 # SHA256 checksums for integrity verification (protects against compromised downloads)
 # To update: download file, run: python -c "import hashlib; print(hashlib.sha256(open('file','rb').read()).hexdigest())"
 CHECKSUMS = {
