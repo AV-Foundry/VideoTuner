@@ -411,9 +411,7 @@ class Stage:
 
         return handler
 
-    def make_vszip_handler(
-        self, *, total_frames: int | None = None
-    ) -> LineHandler:
+    def make_vszip_handler(self, *, total_frames: int | None = None) -> LineHandler:
         """Create a handler for vszip SSIMULACRA2 progress output.
 
         vszip outputs progress in the format:
