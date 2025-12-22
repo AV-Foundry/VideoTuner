@@ -99,12 +99,9 @@ x265_profiles.yaml
 CLAUDE.md
 .claude/
 
-# VapourSynth portable exceptions (override *.py[cod] and lib/ rules above)
-!vapoursynth-portable/**/*.pyd
-!vapoursynth-portable/Lib/
-
-# Unlicensed plugins (must be downloaded separately)
-vapoursynth-portable/vs-plugins/autocrop.dll
+# Dependencies downloaded at build time or by user
+tools/
+vapoursynth-portable/
 
 # Nuitka build artifacts (output goes to dist/ which is already excluded above)
 *.build/

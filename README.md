@@ -19,11 +19,13 @@ quality metrics to find the optimal rate factor for video encoding.
   - [Predicted Bitrate](#predicted-bitrate)
 - [Supported Encoders](#supported-encoders)
 - [System Requirements](#system-requirements)
-- [Bundled Components](#bundled-components)
-- [Prerequisites](#prerequisites)
 - [Installation](#installation)
   - [Pre-built Release (Recommended)](#pre-built-release-recommended)
   - [From Source](#from-source)
+    - [1. Install Python Package](#1-install-python-package)
+    - [2. Set Up VapourSynth Portable](#2-set-up-vapoursynth-portable)
+    - [3. Install Required Plugins](#3-install-required-plugins)
+    - [4. Install x265 Encoder](#4-install-x265-encoder)
 - [Usage](#usage)
   - [Operating Modes](#operating-modes)
     - [1. CRF Search Mode (Default)](#1-crf-search-mode-default)
@@ -149,34 +151,17 @@ Currently supported encoders:
 
 ## System Requirements
 
-- **Operating System:** Windows 10 or Windows 11 (64-bit)
-- **Architecture:** x86-64
+- **Operating System:** Windows 10 or Windows 11
+- **Architecture:** x86-64 (64-bit only)
 
-VideoTuner bundles Windows-specific binaries (x265, VapourSynth). Linux and macOS are not currently supported.
-
-## Bundled Components
-
-Pre-built releases include these components (no separate installation required):
-
-- **x265 encoder** - [Patman's x265 Mod](https://github.com/Patman86/x265-Mod-by-Patman) in `tools/x265.exe`
-- **VapourSynth portable** - Complete VapourSynth installation in `vapoursynth-portable/` with required plugins:
-  - `ffms2` + `ffmsindex` - Frame-accurate video indexing and decoding
-  - `LSMASHSource` - Video loading for SSIMULACRA2 assessment
-  - `vszip` - [vapoursynth-zip](https://github.com/dnjulek/vapoursynth-zip) for SSIMULACRA2 quality metric calculation
-  - `autocrop` - Automatic letterbox/pillarbox detection (see [Installation](#installation) for download)
-
-## Prerequisites
-
-External tools required on PATH:
-
-- FFmpeg (with libvmaf and libplacebo) and FFprobe
-- MKVToolNix `mkvmerge` (used to mux x265 output)
-
-**Additional requirements for running from source:**
-
-- Python 3.13+
+VideoTuner and all bundled dependencies are 64-bit Windows binaries. Linux and macOS are not currently supported.
 
 ## Installation
+
+Both installation methods require these external tools on PATH:
+
+- **FFmpeg** (with libvmaf and libplacebo) and **FFprobe**
+- **MKVToolNix** `mkvmerge` (used to mux x265 output)
 
 ### Pre-built Release (Recommended)
 
@@ -184,47 +169,77 @@ Download the latest release from the [Releases page](https://github.com/AV-Found
 
 1. Download `VideoTuner-vX.X.X.zip`
 2. Extract to your preferred location
-3. Download the `autocrop` plugin from [GitHub](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop) and place `autocrop.dll` in `vapoursynth-portable/vs-plugins/`
+3. Download the `autocrop` plugin (see below) and place `autocrop.dll` in `vapoursynth-portable/vs-plugins/`
 4. Run `VideoTuner.exe` from the command line
 
-The release includes all bundled components (x265, VapourSynth portable). No Python installation required.
+**Bundled dependencies (no separate installation required):**
+
+| Component                                                                    | Version    | Description                                                  |
+| ---------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------ |
+| [x265](https://github.com/Patman86/x265-Mod-by-Patman)                       | 4.1+191+33 | HEVC encoder in `tools/x265.exe`                             |
+| [VapourSynth](https://github.com/vapoursynth/vapoursynth)                    | R72        | Portable environment in `vapoursynth-portable/`              |
+| [ffms2](https://github.com/FFMS/ffms2)                                       | 5.0        | Frame-accurate video indexing (`ffms2.dll`, `ffmsindex.exe`) |
+| [LSMASHSource](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works) | 1266.0.0.0 | Video loading for SSIMULACRA2                                |
+| [vszip](https://github.com/dnjulek/vapoursynth-zip)                          | R11        | SSIMULACRA2 quality metric calculation                       |
+
+**User-provided (not bundled due to licensing):**
+
+| Component                                                                        | Description                                                      |
+| -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [autocrop](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop) | Automatic letterbox/pillarbox detection. Download `autocrop.dll` |
 
 ### From Source
 
-#### Using uv (Recommended)
+Requires **Python 3.13+**. All dependencies must be installed manually.
+
+#### 1. Install Python Package
+
+**Using uv (Recommended):**
 
 ```bash
-# Clone the repository
 git clone https://github.com/AV-Foundry/VideoTuner.git
 cd VideoTuner
-
-# Install with uv (creates venv automatically)
 uv sync
 ```
 
-#### Using pip
+**Using pip:**
 
 ```bash
-# Clone the repository
 git clone https://github.com/AV-Foundry/VideoTuner.git
 cd VideoTuner
-
-# Create and activate a virtual environment
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install the package
 pip install -e .
 ```
 
-Dependencies (automatically installed): pyyaml, rich, pymediainfo
+Python dependencies (automatically installed): pyyaml, rich, pymediainfo
 
-#### Required Plugins
+#### 2. Set Up VapourSynth Portable
 
-When running from source, download the following plugins and place them in `vapoursynth-portable/vs-plugins/`:
+Download `Install-Portable-VapourSynth-R72.ps1` from [VapourSynth R72 releases](https://github.com/vapoursynth/vapoursynth/releases/tag/R72) and run from the repository root:
 
-1. **vszip** (required for SSIMULACRA2): Download `vapoursynth-zip-r11-windows-x86_64.zip` from [vapoursynth-zip releases](https://github.com/dnjulek/vapoursynth-zip/releases/download/R11/vapoursynth-zip-r11-windows-x86_64.zip), extract `vszip.dll`
-2. **autocrop** (required for automatic crop detection): Download from [vapoursynth-autocrop](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop), extract `autocrop.dll`
+```powershell
+powershell -ExecutionPolicy Bypass -File Install-Portable-VapourSynth-R72.ps1 -TargetFolder vapoursynth-portable
+```
+
+#### 3. Install Required Plugins
+
+Download the following plugins and place them in `vapoursynth-portable/vs-plugins/`:
+
+| Plugin       | Version    | Download                                                                                                             | Extract                              |
+| ------------ | ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| ffms2        | 5.0        | [ffms2-5.0-msvc.7z](https://github.com/FFMS/ffms2/releases/tag/5.0)                                                  | `x64/ffms2.dll`, `x64/ffmsindex.exe` |
+| LSMASHSource | 1266.0.0.0 | [L-SMASH-Works-r1266.0.0.0.7z](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works/releases/tag/1266.0.0.0) | `x64/LSMASHSource.dll`               |
+| vszip        | R11        | [vapoursynth-zip-r11-windows-x86_64.zip](https://github.com/dnjulek/vapoursynth-zip/releases/tag/R11)                | `vszip.dll`                          |
+| autocrop     | -          | [vapoursynth-autocrop](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop)                         | `autocrop.dll`                       |
+
+#### 4. Install x265 Encoder
+
+Download x265 and place in `tools/`:
+
+| Component | Version    | Download                                                                                           | Extract                       |
+| --------- | ---------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
+| x265      | 4.1+191+33 | [x265-4.1+191+33...7z](https://github.com/Patman86/x265-Mod-by-Patman/releases/tag/4.1%2B191%2B33) | `x265.exe` → `tools/x265.exe` |
 
 ## Usage
 
@@ -445,21 +460,21 @@ When all profiles are bitrate mode:
 
 The following x265 parameters are **automatically detected from the source video** and set by default. You can override any of these in your profile if needed:
 
-| Parameter | Default Behavior |
-| ----------- | ------------------ |
-| `colorprim` | Mapped from source color primaries (e.g., BT.709 → `bt709`, BT.2020 → `bt2020`) |
-| `transfer` | Mapped from source transfer characteristics (e.g., PQ → `smpte2084`, HLG → `arib-std-b67`) |
-| `colormatrix` | Mapped from source color space, or inferred from primaries if unavailable |
-| `range` | Set to `limited` or `full` based on source color range |
-| `output-depth` | Detected from source pixel format (8, 10, or 12-bit) |
-| `chromaloc` | Preserved from source chroma sample location if present |
-| `hdr10` | Enabled for HDR content (PQ/HLG transfer), disabled for SDR |
-| `hdr10-opt` | Enabled for HDR content for QP optimization |
-| `repeat-headers` | Enabled for HDR (required), disabled for SDR |
-| `master-display` | Extracted from source HDR mastering display metadata if present |
-| `max-cll` | Extracted from source MaxCLL/MaxFALL if present |
-| `aud` | Always enabled (Access Unit Delimiters for compatibility) |
-| `hrd` | Enabled for non-lossless encodes (VBV compliance) |
+| Parameter        | Default Behavior                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `colorprim`      | Mapped from source color primaries (e.g., BT.709 → `bt709`, BT.2020 → `bt2020`)            |
+| `transfer`       | Mapped from source transfer characteristics (e.g., PQ → `smpte2084`, HLG → `arib-std-b67`) |
+| `colormatrix`    | Mapped from source color space, or inferred from primaries if unavailable                  |
+| `range`          | Set to `limited` or `full` based on source color range                                     |
+| `output-depth`   | Detected from source pixel format (8, 10, or 12-bit)                                       |
+| `chromaloc`      | Preserved from source chroma sample location if present                                    |
+| `hdr10`          | Enabled for HDR content (PQ/HLG transfer), disabled for SDR                                |
+| `hdr10-opt`      | Enabled for HDR content for QP optimization                                                |
+| `repeat-headers` | Enabled for HDR (required), disabled for SDR                                               |
+| `master-display` | Extracted from source HDR mastering display metadata if present                            |
+| `max-cll`        | Extracted from source MaxCLL/MaxFALL if present                                            |
+| `aud`            | Always enabled (Access Unit Delimiters for compatibility)                                  |
+| `hrd`            | Enabled for non-lossless encodes (VBV compliance)                                          |
 
 **Example: Override auto-detected parameters:**
 
@@ -480,91 +495,91 @@ Run `videotuner --help` for complete options. Key options include:
 
 ### Mode Selection
 
-| Option | Description |
-| -------- | ------------- |
-| `--assessment-only` | Single assessment without quality targets |
+| Option                            | Description                                        |
+| --------------------------------- | -------------------------------------------------- |
+| `--assessment-only`               | Single assessment without quality targets          |
 | `--multi-profile-search PROFILES` | Compare multiple profiles/groups (comma-separated) |
 
 ### Encoding Options
 
-| Option | Default | Description |
-| -------- | --------- | ------------- |
-| `--preset PRESET` | `slow` | x265 preset (mutually exclusive with `--profile`) |
-| `--profile NAME` | - | Profile name from `x265_profiles.yaml` |
-| `--crf-start-value CRF` | `28` | Starting CRF for search |
-| `--crf-interval STEP` | `0.5` | Minimum CRF step size |
-| `--no-autocrop` | - | Disable automatic crop detection |
+| Option                  | Default | Description                                       |
+| ----------------------- | ------- | ------------------------------------------------- |
+| `--preset PRESET`       | `slow`  | x265 preset (mutually exclusive with `--profile`) |
+| `--profile NAME`        | -       | Profile name from `x265_profiles.yaml`            |
+| `--crf-start-value CRF` | `28`    | Starting CRF for search                           |
+| `--crf-interval STEP`   | `0.5`   | Minimum CRF step size                             |
+| `--no-autocrop`         | -       | Disable automatic crop detection                  |
 
 ### Target Options
 
 **VMAF Targets:**
 
-| Option | Description |
-| -------- | ------------- |
-| `--vmaf-target` | Target VMAF mean score |
+| Option                | Description                     |
+| --------------------- | ------------------------------- |
+| `--vmaf-target`       | Target VMAF mean score          |
 | `--vmaf-hmean-target` | Target VMAF harmonic mean score |
-| `--vmaf-1pct-target` | Target VMAF 1% low score |
-| `--vmaf-min-target` | Target VMAF minimum score |
+| `--vmaf-1pct-target`  | Target VMAF 1% low score        |
+| `--vmaf-min-target`   | Target VMAF minimum score       |
 
 **SSIMULACRA2 Targets:**
 
-| Option | Description |
-| -------- | ------------- |
-| `--ssim2-mean-target` | Target SSIMULACRA2 mean score |
-| `--ssim2-median-target` | Target SSIMULACRA2 median score |
-| `--ssim2-95pct-target` | Target SSIMULACRA2 95% high score |
-| `--ssim2-5pct-target` | Target SSIMULACRA2 5% low score |
+| Option                  | Description                       |
+| ----------------------- | --------------------------------- |
+| `--ssim2-mean-target`   | Target SSIMULACRA2 mean score     |
+| `--ssim2-median-target` | Target SSIMULACRA2 median score   |
+| `--ssim2-95pct-target`  | Target SSIMULACRA2 95% high score |
+| `--ssim2-5pct-target`   | Target SSIMULACRA2 5% low score   |
 
 ### Sampling Parameters
 
-| Option | Default | Description |
-| -------- | --------- | ------------- |
-| `--vmaf-interval-frames` | `1600` | Sample every N frames for VMAF (~1 minute at 24fps) |
-| `--vmaf-region-frames` | `20` | Consecutive frames per VMAF sample |
-| `--ssim2-interval-frames` | `8000` | Sample every N frames for SSIM2 (~5.5 minutes at 24fps) |
-| `--ssim2-region-frames` | `10` | Consecutive frames per SSIM2 sample |
+| Option                    | Default | Description                                             |
+| ------------------------- | ------- | ------------------------------------------------------- |
+| `--vmaf-interval-frames`  | `1600`  | Sample every N frames for VMAF (~1 minute at 24fps)     |
+| `--vmaf-region-frames`    | `20`    | Consecutive frames per VMAF sample                      |
+| `--ssim2-interval-frames` | `8000`  | Sample every N frames for SSIM2 (~5.5 minutes at 24fps) |
+| `--ssim2-region-frames`   | `10`    | Consecutive frames per SSIM2 sample                     |
 
 ### Analysis Options
 
-| Option | Default | Description |
-| -------- | --------- | ------------- |
-| `--no-vmaf` | - | Disable VMAF assessment |
-| `--no-ssim2` | - | Disable SSIMULACRA2 assessment |
-| `--vmaf-model` | auto | VMAF model name or path (auto-selects based on resolution) |
-| `--tonemap` | `auto` | HDR tonemapping: auto\|force\|off |
+| Option         | Default | Description                                                |
+| -------------- | ------- | ---------------------------------------------------------- |
+| `--no-vmaf`    | -       | Disable VMAF assessment                                    |
+| `--no-ssim2`   | -       | Disable SSIMULACRA2 assessment                             |
+| `--vmaf-model` | auto    | VMAF model name or path (auto-selects based on resolution) |
+| `--tonemap`    | `auto`  | HDR tonemapping: auto\|force\|off                          |
 
 ### Guard Bands
 
-| Option | Default | Description |
-| -------- | --------- | ------------- |
-| `--guard-start-percent` | `0.0` | Exclude head (start) percentage |
-| `--guard-end-percent` | `0.0` | Exclude tail (end) percentage |
-| `--guard-seconds` | `0` | Minimum guard in seconds per side |
+| Option                  | Default | Description                       |
+| ----------------------- | ------- | --------------------------------- |
+| `--guard-start-percent` | `0.0`   | Exclude head (start) percentage   |
+| `--guard-end-percent`   | `0.0`   | Exclude tail (end) percentage     |
+| `--guard-seconds`       | `0`     | Minimum guard in seconds per side |
 
 ### Bitrate Warning
 
-| Option | Description |
-| -------- | ------------- |
+| Option                                | Description                                                     |
+| ------------------------------------- | --------------------------------------------------------------- |
 | `--predicted-bitrate-warning-percent` | Warn if output exceeds this percentage of input bitrate (1-100) |
 
 ### Paths
 
-| Option | Default | Description |
-| -------- | --------- | ------------- |
-| `--workdir` | `jobs/<name>_<timestamp>` | Working directory |
-| `--ffmpeg` | `ffmpeg` | FFmpeg binary |
-| `--ffprobe` | `ffprobe` | FFprobe binary |
-| `--mkvmerge` | `mkvmerge` | MKVmerge binary |
-| `--vs-dir` | `./vapoursynth-portable` | VapourSynth portable directory |
-| `--vs-plugin-dir` | `<vs-dir>/vs-plugins` | VapourSynth plugin directory |
+| Option            | Default                   | Description                    |
+| ----------------- | ------------------------- | ------------------------------ |
+| `--workdir`       | `jobs/<name>_<timestamp>` | Working directory              |
+| `--ffmpeg`        | `ffmpeg`                  | FFmpeg binary                  |
+| `--ffprobe`       | `ffprobe`                 | FFprobe binary                 |
+| `--mkvmerge`      | `mkvmerge`                | MKVmerge binary                |
+| `--vs-dir`        | `./vapoursynth-portable`  | VapourSynth portable directory |
+| `--vs-plugin-dir` | `<vs-dir>/vs-plugins`     | VapourSynth plugin directory   |
 
 ### Logging
 
-| Option | Description |
-| -------- | ------------- |
-| `-v` / `--verbose` | Debug logging |
-| `-q` / `--quiet` | Warnings only |
-| `--log-file` | Write summary log to file |
+| Option             | Description               |
+| ------------------ | ------------------------- |
+| `-v` / `--verbose` | Debug logging             |
+| `-q` / `--quiet`   | Warnings only             |
+| `--log-file`       | Write summary log to file |
 
 ## Output
 
