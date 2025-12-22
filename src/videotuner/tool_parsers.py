@@ -48,6 +48,9 @@ SSIM_LINE_RE = re.compile(
     re.IGNORECASE,
 )
 
+# vszip progress: "vszip progress: 50/100"
+VSZIP_PROGRESS_RE = re.compile(r"vszip progress:\s*(\d+)\s*/\s*(\d+)", re.IGNORECASE)
+
 # ffmsindex progress: "Indexing, please wait... 50%"
 FFMSINDEX_PROGRESS_RE = re.compile(r"(\d+)%", re.IGNORECASE)
 

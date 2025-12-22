@@ -44,6 +44,10 @@ VMAF_THREAD_CPU_FRACTION: float = 0.5
 # Maximum threads for VMAF calculation
 VMAF_MAX_THREADS: int = 16
 
+# =============================================================================
+# Resolution Constants
+# =============================================================================
+
 # Resolution classification tolerance (3% relative)
 RESOLUTION_RELATIVE_TOLERANCE: float = 0.03
 

@@ -12,7 +12,7 @@ This project adheres to the [Contributor Covenant 3.0 Code of Conduct](CODE_OF_C
 
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
-- External tools on PATH: FFmpeg (with libvmaf, libplacebo), ffprobe, mkvmerge, ssimulacra2_rs
+- External tools on PATH: FFmpeg (with libvmaf, libplacebo), ffprobe, mkvmerge
 
 ### Development Setup
 
@@ -39,9 +39,11 @@ This project adheres to the [Contributor Covenant 3.0 Code of Conduct](CODE_OF_C
    pip install -e ".[dev]"
    ```
 
-3. **Download the autocrop plugin:**
+3. **Download required VapourSynth plugins:**
 
-   Download from [GitHub](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop) and place `autocrop.dll` in `vapoursynth-portable/vs-plugins/`
+   Download and place in `vapoursynth-portable/vs-plugins/`:
+   - **vszip**: Download from [vapoursynth-zip releases](https://github.com/dnjulek/vapoursynth-zip/releases/download/R11/vapoursynth-zip-r11-windows-x86_64.zip), extract `vszip.dll`
+   - **autocrop**: Download from [vapoursynth-autocrop](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop), extract `autocrop.dll`
 
 ## Development Workflow
 

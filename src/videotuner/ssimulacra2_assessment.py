@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-import re
+import statistics
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,8 +10,7 @@ from typing import TYPE_CHECKING
 
 from .utils import ensure_dir, run_capture
 from .media import get_assessment_frame_count
-from .encoding_utils import write_vpy_script
-from .tool_parsers import FLOAT_PATTERN
+from .encoding_utils import write_vpy_script, VapourSynthEnv
 
 if TYPE_CHECKING:
     from .profiles import Profile
@@ -28,224 +27,193 @@ class SSIM2Result:
     count: int
 
 
-def _parse_video_summary(text: str) -> SSIM2Result | None:
-    mean = median = p5 = p95 = std_dev = None
-    count = None
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        m = re.search(r"Video Score for\s+(\d+)\s+frames", line)
-        if m:
-            try:
-                count = int(m.group(1))
-            except Exception:
-                pass
-        low = line.lower()
-        match = re.search(rf"mean\s*:\s*({FLOAT_PATTERN})", low, re.IGNORECASE)
-        if match:
-            mean = float(match.group(1))
-            continue
-        match = re.search(rf"median\s*:\s*({FLOAT_PATTERN})", low, re.IGNORECASE)
-        if match:
-            median = float(match.group(1))
-            continue
-        if low.startswith("5th percentile"):
-            match = re.search(
-                rf"5th percentile\s*:\s*({FLOAT_PATTERN})", low, re.IGNORECASE
-            )
-            if match:
-                p5 = float(match.group(1))
-            continue
-        if low.startswith("95th percentile"):
-            match = re.search(
-                rf"95th percentile\s*:\s*({FLOAT_PATTERN})", low, re.IGNORECASE
-            )
-            if match:
-                p95 = float(match.group(1))
-            continue
-        if low.startswith("std dev"):
-            match = re.search(rf"std dev\s*:\s*({FLOAT_PATTERN})", low, re.IGNORECASE)
-            if match:
-                std_dev = float(match.group(1))
-            continue
-    if mean is None or median is None or p5 is None:
-        return None
-    if count is None:
-        count = 0
-    if p95 is None:
-        p95 = float("nan")
-    if std_dev is None:
-        std_dev = float("nan")
+def _calculate_stats_from_scores(scores: list[float]) -> SSIM2Result:
+    """Calculate summary statistics from a list of per-frame scores.
+
+    Args:
+        scores: List of SSIMULACRA2 scores (one per frame)
+
+    Returns:
+        SSIM2Result with calculated statistics
+
+    Raises:
+        RuntimeError: If scores list is empty
+    """
+    if not scores:
+        raise RuntimeError("No scores provided for statistics calculation")
+
+    scores_sorted = sorted(scores)
+    count = len(scores)
+    mean = statistics.mean(scores)
+    median = statistics.median(scores)
+    std_dev = statistics.stdev(scores) if count > 1 else 0.0
+
+    # Calculate percentiles (5th and 95th)
+    p5_idx = max(0, int(count * 0.05) - 1)
+    p95_idx = min(count - 1, int(count * 0.95))
+    p5_low = scores_sorted[p5_idx]
+    p95_high = scores_sorted[p95_idx]
+
     return SSIM2Result(
-        mean=mean, median=median, p5_low=p5, p95_high=p95, std_dev=std_dev, count=count
+        mean=mean,
+        median=median,
+        p5_low=p5_low,
+        p95_high=p95_high,
+        std_dev=std_dev,
+        count=count,
     )
 
 
-def assess_with_ssimulacra2_video(
+def _run_vszip_assessment(
     *,
-    ssim2_bin: str,
     ref_path: Path,
     dis_path: Path,
-    log_path: Path | None = None,
-    cwd: Path | None = None,
-    env: dict[str, str] | None = None,
+    vs_env: VapourSynthEnv,
+    temp_dir: Path,
     line_handler: Callable[[str], bool] | None = None,
-    _vs_plugin_dir: Path | None = None,
 ) -> SSIM2Result:
-    """Run SSIMULACRA2 in 'video' mode directly on two inputs (MKV or .vpy).
+    """Run SSIMULACRA2 assessment via vszip VapourSynth plugin.
 
-    When line_handler is provided, uses --verbose flag to get per-frame scores
-    and calls the handler for each frame line. Otherwise, lets native progress bar
-    display to terminal.
+    Creates a VapourSynth script that uses vszip.SSIMULACRA2 to compute
+    per-frame scores, then calculates summary statistics.
 
     Args:
-        ssim2_bin: Path to ssimulacra2 binary
         ref_path: Reference video path
         dis_path: Distorted video path
-        log_path: Optional path to write JSON log
-        cwd: Working directory for subprocess. If set, VapourSynth scripts will be
-             generated to control index file locations.
-        env: Environment variables for subprocess
-        line_handler: Optional callback for progress updates. If provided, --verbose is used
-                      and stderr is suppressed. Handler receives each line and returns True
-                      if the line was consumed.
-        vs_plugin_dir: Optional VapourSynth plugin directory path. Required when cwd is set
-                       to explicitly load lsmas plugin in generated scripts.
+        vs_env: VapourSynth environment configuration
+        temp_dir: Directory for temporary files
+        line_handler: Optional callback for progress updates
+
+    Returns:
+        SSIM2Result with calculated metrics
+
+    Raises:
+        RuntimeError: If vszip execution fails or produces no scores
     """
     log = logging.getLogger(__name__)
-    import subprocess
 
-    def _format_failure(code: int, stdout_data: str, stderr_data: str) -> str:
-        parts = [f"SSIMULACRA2 video mode failed with exit code {code}."]
-        stderr_data = (stderr_data or "").strip()
-        stdout_data = (stdout_data or "").strip()
-        if stderr_data:
-            parts.append("stderr:\n" + stderr_data)
-        if stdout_data:
-            parts.append("stdout:\n" + stdout_data)
-        if len(parts) == 1:
-            parts.append("No output was captured.")
-        return "\n".join(parts)
+    python_exe = vs_env.vs_dir / "python.exe"
+    if not python_exe.exists():
+        raise FileNotFoundError(f"VapourSynth python.exe not found at: {python_exe}")
 
-    stdout_capture = ""
-    stderr_capture = ""
+    # Create temporary script
+    vpy_path = temp_dir / "vszip_ssim2.vpy"
 
-    # Generate VapourSynth scripts when cwd is set to control index file locations
-    # This avoids Windows MAX_PATH issues with lsmas default encoded filenames
-    cleanup_vpy_scripts = False
-    if cwd is not None:
-        cwd_path = ensure_dir(Path(cwd))
+    # Build VapourSynth script that calculates SSIMULACRA2 and prints scores
+    # Using lsmas for video loading (same as our encoding pipeline)
+    ref_cache = temp_dir / "vszip_ref.lwi"
+    dis_cache = temp_dir / "vszip_dis.lwi"
 
-        # Generate .vpy scripts with explicit cachefile paths (short names in temp dir)
-        ref_vpy = cwd_path / "ssim_ref.vpy"
-        dis_vpy = cwd_path / "ssim_dis.vpy"
+    vpy_content = f'''import vapoursynth as vs
+import sys
 
-        # Create VapourSynth script for reference video
-        # Note: lsmas plugin is auto-loaded via VAPOURSYNTH_PLUGIN_PATH env var
-        ref_script = (
-            f"from vapoursynth import core\n"
-            f"clip = core.lsmas.LWLibavSource(\n"
-            f"    source={str(ref_path.resolve())!r},\n"
-            f"    cachefile={str(cwd_path / 'ssim_ref_index.lwi')!r}\n"
-            f")\n"
-            f"clip.set_output()\n"
-        )
-        write_vpy_script(ref_vpy, ref_script)
+core = vs.core
 
-        # Create VapourSynth script for distorted video
-        dis_script = (
-            f"from vapoursynth import core\n"
-            f"clip = core.lsmas.LWLibavSource(\n"
-            f"    source={str(dis_path.resolve())!r},\n"
-            f"    cachefile={str(cwd_path / 'ssim_dis_index.lwi')!r}\n"
-            f")\n"
-            f"clip.set_output()\n"
-        )
-        write_vpy_script(dis_vpy, dis_script)
+# Force unbuffered output
+sys.stdout.reconfigure(line_buffering=True)
+sys.stderr.reconfigure(line_buffering=True)
 
-        ref_arg = ref_vpy.name
-        dis_arg = dis_vpy.name
-        cleanup_vpy_scripts = True
-    else:
-        ref_arg = str(ref_path)
-        dis_arg = str(dis_path)
+try:
+    print("[vszip] Loading reference video...", file=sys.stderr, flush=True)
+    # Load reference and distorted videos
+    ref = core.lsmas.LWLibavSource(
+        source=r"{ref_path.resolve()}",
+        cachefile=r"{ref_cache}"
+    )
+    print(f"[vszip] Reference: {{ref.width}}x{{ref.height}}, {{ref.format.name}}, {{len(ref)}} frames", file=sys.stderr, flush=True)
 
-    # Build command with --verbose if using line handler
-    cmd = [ssim2_bin, "video"]
-    if line_handler is not None:
-        cmd.append("--verbose")
-    cmd.extend([ref_arg, dis_arg])
+    print("[vszip] Loading distorted video...", file=sys.stderr, flush=True)
+    dis = core.lsmas.LWLibavSource(
+        source=r"{dis_path.resolve()}",
+        cachefile=r"{dis_cache}"
+    )
+    print(f"[vszip] Distorted: {{dis.width}}x{{dis.height}}, {{dis.format.name}}, {{len(dis)}} frames", file=sys.stderr, flush=True)
+
+    # Validate dimensions match
+    if ref.width != dis.width or ref.height != dis.height:
+        print(f"ERROR: Resolution mismatch - ref={{ref.width}}x{{ref.height}}, dis={{dis.width}}x{{dis.height}}", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    # Check if vszip plugin is available
+    if not hasattr(core, 'vszip'):
+        print("ERROR: vszip plugin not loaded", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    print("[vszip] Running SSIMULACRA2 comparison...", file=sys.stderr, flush=True)
+    # vszip.Metrics handles format conversion internally
+    # mode=0 selects SSIMULACRA2 metric
+    result = ref.vszip.Metrics(dis, mode=0)
+
+    total_frames = len(result)
+    print(f"[vszip] Processing {{total_frames}} frames", file=sys.stderr, flush=True)
+
+    if total_frames == 0:
+        print("ERROR: SSIMULACRA2 returned empty result", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+    # Iterate frames and collect scores
+    for i in range(total_frames):
+        frame = result.get_frame(i)
+        score = frame.props.get("_SSIMULACRA2", None)
+        if score is not None:
+            # Print score to stdout for parsing
+            print(f"SCORE:{{score}}", flush=True)
+        else:
+            print(f"WARNING: Frame {{i}} has no _SSIMULACRA2 property", file=sys.stderr, flush=True)
+        # Progress to stderr for line_handler
+        print(f"vszip progress: {{i + 1}}/{{total_frames}}", file=sys.stderr, flush=True)
+
+    print("[vszip] Assessment complete", file=sys.stderr, flush=True)
+
+except Exception as e:
+    print(f"ERROR: {{e}}", file=sys.stderr, flush=True)
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
+'''
+
+    write_vpy_script(vpy_path, vpy_content)
+    log.debug("vszip script written to: %s", vpy_path)
 
     try:
-        if line_handler is not None:
-            # Use run_capture for line-by-line processing with callback
-            # This handles threading for stdout/stderr and returns captured output
-            out = run_capture(
-                cmd,
-                cwd=cwd,
-                env=env,
-                line_callback=line_handler,
-            )
-        else:
-            # Use subprocess.run directly for simple capture without callback
-            proc = subprocess.run(
-                cmd,
-                cwd=str(cwd) if cwd else None,
-                env=env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            stdout_capture = proc.stdout or ""
-            stderr_capture = proc.stderr or ""
-            if proc.returncode != 0:
-                raise RuntimeError(
-                    _format_failure(proc.returncode, stdout_capture, stderr_capture)
-                )
-            out = stdout_capture
+        # Setup environment for VapourSynth portable
+        env = vs_env.build_env()
 
-    except RuntimeError:
-        # Re-raise RuntimeError (from run_capture or _format_failure) as-is
-        raise
-    except Exception as e:
-        log.error("SSIMULACRA2 video call failed: %s", e)
-        raise
+        # Run VapourSynth script
+        output = run_capture(
+            [str(python_exe), str(vpy_path)],
+            cwd=temp_dir,
+            env=env,
+            line_callback=line_handler,
+        )
+
+        # Parse scores from output (lines starting with "SCORE:")
+        scores: list[float] = []
+        for line in output.splitlines():
+            line = line.strip()
+            if line.startswith("SCORE:"):
+                try:
+                    score = float(line[6:])
+                    scores.append(score)
+                except ValueError:
+                    pass
+
+        if not scores:
+            # Include captured output in error for debugging
+            log.error("vszip output:\n%s", output)
+            raise RuntimeError("vszip produced no valid SSIMULACRA2 scores")
+
+        return _calculate_stats_from_scores(scores)
+
     finally:
-        # Cleanup generated VapourSynth scripts if they were created
-        if cleanup_vpy_scripts and cwd is not None:
-            try:
-                (Path(cwd) / "ssim_ref.vpy").unlink(missing_ok=True)
-                (Path(cwd) / "ssim_dis.vpy").unlink(missing_ok=True)
-            except Exception:
-                pass  # Ignore cleanup errors
-
-    # Parse the summary from output
-    result = _parse_video_summary(out)
-    if result is None:
-        raise RuntimeError("SSIMULACRA2 video mode produced no parseable scores")
-
-    if log_path is not None:
-        try:
-            _ = ensure_dir(log_path.parent)
-        except Exception:
-            pass
-        with open(log_path, "w", encoding="utf-8") as f:
-            json.dump(
-                {
-                    "tool": "ssimulacra2",
-                    "mode": "video",
-                    "count": result.count,
-                    "mean": result.mean,
-                    "median": result.median,
-                    "p5_low": result.p5_low,
-                    "p95_high": result.p95_high,
-                    "std_dev": result.std_dev,
-                },
-                f,
-                indent=2,
-            )
-    return result
+        # Clean up temporary files
+        if vpy_path.exists():
+            vpy_path.unlink()
+        # Clean up cache files
+        if ref_cache.exists():
+            ref_cache.unlink()
+        if dis_cache.exists():
+            dis_cache.unlink()
 
 
 def assess_ssim2_concatenated(
@@ -254,14 +222,14 @@ def assess_ssim2_concatenated(
     workdir: Path,
     temp_dir: Path,
     profile: Profile,
-    ssim2_bin: str,
-    vs_env: dict[str, str],
-    vs_plugin_dir: Path | None,
+    vs_env: VapourSynthEnv,
     display: PipelineDisplay,
     log: logging.Logger,
     iteration: int,
 ) -> list[SSIM2Result]:
     """Run SSIMULACRA2 assessment on concatenated reference and distorted files.
+
+    Uses vszip VapourSynth plugin for CPU-based SSIMULACRA2 calculation.
 
     Args:
         reference_path: Path to concatenated lossless reference
@@ -269,9 +237,7 @@ def assess_ssim2_concatenated(
         workdir: Working directory for output files
         temp_dir: Temporary directory for intermediate files
         profile: Encoding profile (used for output directory naming)
-        ssim2_bin: Path to ssimulacra2_rs binary
-        vs_env: Environment variables for VapourSynth
-        vs_plugin_dir: VapourSynth plugin directory
+        vs_env: VapourSynth environment configuration
         display: Progress display manager
         log: Logger instance
         iteration: Current iteration number
@@ -295,16 +261,33 @@ def assess_ssim2_concatenated(
         transient=True,
         show_done=True,
     ) as stage:
-        result = assess_with_ssimulacra2_video(
-            ssim2_bin=ssim2_bin,
+        result = _run_vszip_assessment(
             ref_path=reference_path,
             dis_path=distorted_path,
-            log_path=ssim2_log_path,
-            cwd=temp_dir,
-            env=vs_env,
-            line_handler=stage.make_ssim_verbose_handler(total_frames=total_frames),
-            _vs_plugin_dir=vs_plugin_dir,
+            vs_env=vs_env,
+            temp_dir=temp_dir,
+            line_handler=stage.make_vszip_handler(total_frames=total_frames),
         )
+
+    # Write JSON log
+    try:
+        _ = ensure_dir(ssim2_log_path.parent)
+        with open(ssim2_log_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "tool": "vszip",
+                    "count": result.count,
+                    "mean": result.mean,
+                    "median": result.median,
+                    "p5_low": result.p5_low,
+                    "p95_high": result.p95_high,
+                    "std_dev": result.std_dev,
+                },
+                f,
+                indent=2,
+            )
+    except Exception:
+        pass  # Log writing is optional
 
     log.info(
         "SSIMULACRA2: mean=%.2f, median=%.2f, 5%%=%.2f, 95%%=%.2f",

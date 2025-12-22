@@ -69,7 +69,6 @@ class PipelineArgs:
 
     ssim2: bool = True
     ssim2_log: Path | None = None
-    ssim2_bin: str | None = None
     vs_dir: Path | None = None
     vs_plugin_dir: Path | None = None
     auto_crop: bool = True
@@ -371,13 +370,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         default=_get_default("mkvmerge_bin"),
         help="MKVmerge binary path",
-    )
-    _ = paths_group.add_argument(
-        "--ssim2-bin",
-        type=str,
-        metavar="PATH",
-        default=_get_default("ssim2_bin"),
-        help="SSIMULACRA2 binary path (default: ssimulacra2_rs)",
     )
     _ = paths_group.add_argument(
         "--vs-dir",

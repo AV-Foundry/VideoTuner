@@ -110,6 +110,9 @@ def run_pipeline(args: PipelineArgs) -> int:
         res,
     )
 
+    # Determine app root early for tool detection
+    repo_root: Path = get_app_root()
+
     # Display active settings summary
     display_settings_summary(
         display.console, args, multi_profile_display, input_path.name
@@ -151,9 +154,6 @@ def run_pipeline(args: PipelineArgs) -> int:
         )
         log.error("Reduce guard settings")
         return 1
-
-    # Determine app root (works in dev, PyInstaller, and Nuitka)
-    repo_root: Path = get_app_root()
 
     # Check if autocrop plugin is available when autocrop is enabled
     if auto_crop:

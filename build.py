@@ -5,6 +5,9 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.request
+import zipfile
 from pathlib import Path
 
 # Import version from the package
@@ -15,6 +18,10 @@ REPO_ROOT = Path(__file__).parent
 DIST_DIR = REPO_ROOT / "dist"
 RELEASE_NAME = f"VideoTuner-v{__version__}"
 RELEASE_DIR = DIST_DIR / RELEASE_NAME
+
+# External dependency URLs
+VSZIP_URL = "https://github.com/dnjulek/vapoursynth-zip/releases/download/R11/vapoursynth-zip-r11-windows-x86_64.zip"
+VSZIP_DLL = "vszip.dll"
 
 
 def clean_previous_build() -> None:
@@ -27,6 +34,49 @@ def clean_previous_build() -> None:
     # nuitka_cache = DIST_DIR / "pipeline.build"
     # if nuitka_cache.exists():
     #     shutil.rmtree(nuitka_cache)
+
+
+def download_vszip(plugin_dir: Path) -> None:
+    """Download and extract vszip plugin to the plugin directory."""
+    dest_dll = plugin_dir / VSZIP_DLL
+    if dest_dll.exists():
+        print(f"  {VSZIP_DLL} already exists, skipping download")
+        return
+
+    print(f"Downloading {VSZIP_DLL} from vapoursynth-zip...")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        zip_path = Path(tmpdir) / "vszip.zip"
+
+        # Download the zip file
+        try:
+            _ = urllib.request.urlretrieve(VSZIP_URL, zip_path)
+        except Exception as e:
+            print(f"ERROR: Failed to download vszip: {e}")
+            sys.exit(1)
+
+        # Extract vszip.dll from the zip
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                # Find vszip.dll in the archive (may be in a subdirectory)
+                dll_found = False
+                for name in zf.namelist():
+                    if name.endswith(VSZIP_DLL):
+                        # Extract to temp dir then move to destination
+                        _ = zf.extract(name, tmpdir)
+                        extracted_path = Path(tmpdir) / name
+                        _ = shutil.copy2(extracted_path, dest_dll)
+                        dll_found = True
+                        print(f"  Extracted {VSZIP_DLL} to {plugin_dir}")
+                        break
+
+                if not dll_found:
+                    print(f"ERROR: {VSZIP_DLL} not found in downloaded archive")
+                    sys.exit(1)
+
+        except zipfile.BadZipFile as e:
+            print(f"ERROR: Invalid zip file: {e}")
+            sys.exit(1)
 
 
 def run_nuitka() -> Path:
@@ -105,6 +155,11 @@ def assemble_release(exe_path: Path) -> None:
     if vs_src.exists():
         print("Copying vapoursynth-portable/ ...")
         _ = shutil.copytree(vs_src, vs_dst)
+
+        # Download external plugins to the release plugin directory
+        plugin_dir = vs_dst / "vs-plugins"
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        download_vszip(plugin_dir)
     else:
         print(f"WARNING: vapoursynth-portable/ not found at {vs_src}")
 

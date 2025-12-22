@@ -18,6 +18,7 @@ quality metrics to find the optimal rate factor for video encoding.
   - [Automatic Crop Detection](#automatic-crop-detection)
   - [Predicted Bitrate](#predicted-bitrate)
 - [Supported Encoders](#supported-encoders)
+- [System Requirements](#system-requirements)
 - [Bundled Components](#bundled-components)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
@@ -146,14 +147,22 @@ Currently supported encoders:
 
 - **x265 (HEVC)**
 
+## System Requirements
+
+- **Operating System:** Windows 10 or Windows 11 (64-bit)
+- **Architecture:** x86-64
+
+VideoTuner bundles Windows-specific binaries (x265, VapourSynth). Linux and macOS are not currently supported.
+
 ## Bundled Components
 
-VideoTuner includes these components (no separate installation required):
+Pre-built releases include these components (no separate installation required):
 
 - **x265 encoder** - [Patman's x265 Mod](https://github.com/Patman86/x265-Mod-by-Patman) in `tools/x265.exe`
 - **VapourSynth portable** - Complete VapourSynth installation in `vapoursynth-portable/` with required plugins:
   - `ffms2` + `ffmsindex` - Frame-accurate video indexing and decoding
-  - `LSMASHSource` - Required for SSIMULACRA2 assessment
+  - `LSMASHSource` - Video loading for SSIMULACRA2 assessment
+  - `vszip` - [vapoursynth-zip](https://github.com/dnjulek/vapoursynth-zip) for SSIMULACRA2 quality metric calculation
   - `autocrop` - Automatic letterbox/pillarbox detection (see [Installation](#installation) for download)
 
 ## Prerequisites
@@ -162,7 +171,6 @@ External tools required on PATH:
 
 - FFmpeg (with libvmaf and libplacebo) and FFprobe
 - MKVToolNix `mkvmerge` (used to mux x265 output)
-- `ssimulacra2_rs` - install from [crates.io](https://crates.io/crates/ssimulacra2_rs)
 
 **Additional requirements for running from source:**
 
@@ -211,9 +219,12 @@ pip install -e .
 
 Dependencies (automatically installed): pyyaml, rich, pymediainfo
 
-#### Required Plugin
+#### Required Plugins
 
-Download the `autocrop` plugin from [GitHub](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop) and place `autocrop.dll` in `vapoursynth-portable/vs-plugins/`
+When running from source, download the following plugins and place them in `vapoursynth-portable/vs-plugins/`:
+
+1. **vszip** (required for SSIMULACRA2): Download `vapoursynth-zip-r11-windows-x86_64.zip` from [vapoursynth-zip releases](https://github.com/dnjulek/vapoursynth-zip/releases/download/R11/vapoursynth-zip-r11-windows-x86_64.zip), extract `vszip.dll`
+2. **autocrop** (required for automatic crop detection): Download from [vapoursynth-autocrop](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop), extract `autocrop.dll`
 
 ## Usage
 
@@ -544,7 +555,6 @@ Run `videotuner --help` for complete options. Key options include:
 | `--ffmpeg` | `ffmpeg` | FFmpeg binary |
 | `--ffprobe` | `ffprobe` | FFprobe binary |
 | `--mkvmerge` | `mkvmerge` | MKVmerge binary |
-| `--ssim2-bin` | `ssimulacra2_rs` | SSIMULACRA2 binary |
 | `--vs-dir` | `./vapoursynth-portable` | VapourSynth portable directory |
 | `--vs-plugin-dir` | `<vs-dir>/vs-plugins` | VapourSynth plugin directory |
 

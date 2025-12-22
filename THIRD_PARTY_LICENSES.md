@@ -8,6 +8,7 @@ VideoTuner bundles the following third-party software components. This document 
 | --------- | ------- | ------ |
 | x265 Patman's Mod | GPL-2.0-or-later | <https://github.com/Patman86/x265-Mod-by-Patman> |
 | VapourSynth | LGPL-2.1-or-later | <https://github.com/vapoursynth/vapoursynth> |
+| vapoursynth-zip | MIT | <https://github.com/dnjulek/vapoursynth-zip> |
 | FFMS2 | GPL-3.0 (binary) | <https://github.com/FFMS/ffms2> |
 | LSMASHSource | ISC + LGPL-2.1 | <https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works> |
 | L-SMASH | ISC | <https://github.com/l-smash/l-smash> |
@@ -41,6 +42,22 @@ Full license text: [licenses/GPL-2.0.txt](licenses/GPL-2.0.txt)
 This library is free software; you can redistribute it and/or modify it under the terms of the GNU Lesser General Public License as published by the Free Software Foundation; either version 2.1 of the License, or (at your option) any later version.
 
 Full license text: [licenses/LGPL-2.1.txt](licenses/LGPL-2.1.txt)
+
+---
+
+## vapoursynth-zip (vszip)
+
+**Location:** `vapoursynth-portable/vs-plugins/vszip.dll`\
+**License:** MIT License\
+**Copyright:** Copyright (c) 2024 Julek
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Full license text: [licenses/MIT.txt](licenses/MIT.txt)
 
 ---
 

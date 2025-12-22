@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import shlex
-import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -97,30 +96,6 @@ def resolve_absolute_path(path: Path, cwd: Path | None = None) -> Path:
     return path.resolve()
 
 
-def resolve_ssim2_bin(ssim2_bin_arg: str | None) -> str:
-    """Resolve SSIMULACRA2 binary path from CLI argument or PATH.
-
-    Args:
-        ssim2_bin_arg: User-provided --ssim2-bin argument (None if not specified)
-
-    Returns:
-        Path to ssimulacra2_rs binary as string
-
-    Raises:
-        FileNotFoundError: If ssimulacra2_rs is not found on PATH when no arg provided
-    """
-    if ssim2_bin_arg:
-        return str(ssim2_bin_arg)
-
-    ssim2_bin = shutil.which("ssimulacra2_rs")
-    if ssim2_bin is None:
-        raise FileNotFoundError(
-            "ssimulacra2_rs not found on PATH. Install with: cargo install ssimulacra2_rs\n"
-            + "See: https://crates.io/crates/ssimulacra2_rs"
-        )
-    return ssim2_bin
-
-
 def calculate_usable_frames(
     total_frames: int,
     guard_start_frames: int,
@@ -205,7 +180,7 @@ def create_temp_encode_paths(
 class VapourSynthEnv:
     """Unified VapourSynth environment for encoding and assessment tools.
 
-    VapourSynth is mandatory for both x265 encoding and ssimulacra2_rs.
+    VapourSynth is mandatory for both x265 encoding and SSIMULACRA2 assessment.
     This class provides strict validation and comprehensive environment setup.
 
     Usage:
@@ -306,8 +281,11 @@ class VapourSynthEnv:
         # Set VAPOURSYNTH_PORTABLE for tools that use it
         env["VAPOURSYNTH_PORTABLE"] = str(self.vs_dir)
 
-        # Prepend VapourSynth directory to PATH so DLLs are found first
-        env["PATH"] = str(self.vs_dir) + os.pathsep + env.get("PATH", "")
+        # Prepend VapourSynth directories to PATH so DLLs are found first
+        # Include both vs_dir (for vapoursynth.dll, VSScript.dll) and
+        # vs_plugin_dir (for ffms2.dll and other plugins)
+        path_additions = str(self.vs_dir) + os.pathsep + str(self.vs_plugin_dir)
+        env["PATH"] = path_additions + os.pathsep + env.get("PATH", "")
 
         # Set plugin path
         if self.vs_plugin_dir.exists():
