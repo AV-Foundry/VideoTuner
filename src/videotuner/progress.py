@@ -25,6 +25,7 @@ from .tool_parsers import (
     FFMSINDEX_PROGRESS_RE,
     MKVMERGE_PCT_RE,
     SSIM_LINE_RE,
+    VSZIP_PROGRESS_RE,
     X265_ENCODED_RE,
     X265_FRAME_RE,
     X265_PROGRESS_RE,
@@ -407,5 +408,37 @@ class Stage:
             # Frame numbers are 0-indexed, so completed = frame_index + 1
             self.update(completed=frame_index + 1)
             return True  # Mark as consumed so it doesn't print
+
+        return handler
+
+    def make_vszip_handler(
+        self, *, total_frames: int | None = None
+    ) -> LineHandler:
+        """Create a handler for vszip SSIMULACRA2 progress output.
+
+        vszip outputs progress in the format:
+            "vszip progress: 50/100"
+
+        Args:
+            total_frames: Expected total frame count
+        """
+        if total_frames:
+            self.set_total(total_frames)
+
+        def handler(line: str) -> bool:
+            line = clean_ansi(line)
+
+            match = VSZIP_PROGRESS_RE.search(line)
+            if not match:
+                return False
+
+            current = int(match.group(1))
+            total = int(match.group(2))
+
+            if total > 0:
+                self.set_total(total)
+            self.update(completed=current)
+
+            return True
 
         return handler

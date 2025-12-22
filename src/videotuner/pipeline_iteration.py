@@ -124,6 +124,8 @@ def run_ssim2_assessment(
 ) -> list["SSIM2Result"]:
     """Run SSIMULACRA2 assessment with VapourSynth config.
 
+    Uses vszip VapourSynth plugin for CPU-based SSIMULACRA2 calculation.
+
     Args:
         ctx: Pipeline iteration context
         distorted_path: Path to distorted encode
@@ -132,7 +134,7 @@ def run_ssim2_assessment(
     Returns:
         List of SSIM2Result (typically single element for concatenated file)
     """
-    from .encoding_utils import VapourSynthEnv, resolve_ssim2_bin
+    from .encoding_utils import VapourSynthEnv
     from .ssimulacra2_assessment import assess_ssim2_concatenated
 
     if ctx.ssim2_ref_path is None:
@@ -140,12 +142,9 @@ def run_ssim2_assessment(
         return []
 
     try:
-        ssim2_bin = resolve_ssim2_bin(ctx.args.ssim2_bin)
-
         vs_env = VapourSynthEnv.from_args(
             ctx.args.vs_dir, ctx.args.vs_plugin_dir, ctx.repo_root
         )
-        env = vs_env.build_env()
 
         return assess_ssim2_concatenated(
             reference_path=ctx.ssim2_ref_path,
@@ -153,9 +152,7 @@ def run_ssim2_assessment(
             workdir=ctx.workdir,
             temp_dir=ctx.temp_dir,
             profile=ctx.selected_profile,
-            ssim2_bin=ssim2_bin,
-            vs_env=env,
-            vs_plugin_dir=vs_env.vs_plugin_dir,
+            vs_env=vs_env,
             display=ctx.display,
             log=ctx.log,
             iteration=iteration,
