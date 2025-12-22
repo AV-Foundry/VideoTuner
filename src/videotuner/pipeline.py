@@ -51,6 +51,7 @@ from .pipeline_multi_profile import (
 )
 from .pipeline_reference import (
     MetricSamplingParams,
+    are_sampling_params_equal,
     generate_metric_reference,
 )
 from .utils import get_app_root, log_section
@@ -437,48 +438,28 @@ def run_pipeline(args: PipelineArgs) -> int:
     ssim2_ref_path: Path | None = None
     reference_dir = get_reference_dir(workdir)
 
-    # Generate VMAF concatenated reference
-    if args.vmaf:
-        vmaf_sampling = MetricSamplingParams(
-            interval_frames=args.vmaf_interval_frames,
-            region_frames=args.vmaf_region_frames,
-            guard_start_frames=guard_start_frames,
-            guard_end_frames=guard_end_frames,
-            total_frames=total_frames,
-        )
-        vmaf_ref_path = generate_metric_reference(
-            metric_type="vmaf",
-            source_path=input_path,
-            output_dir=reference_dir,
-            sampling_params=vmaf_sampling,
-            fps=info.fps,
-            lossless_profile=lossless_profile,
-            video_info=info,
-            mkvmerge_bin=args.mkvmerge_bin,
-            repo_root=repo_root,
-            temp_dir=temp_dir,
-            display=display,
-            log=log,
-            auto_crop=auto_crop,
-            crop_values=crop_values,
-        )
-        if vmaf_ref_path is None:
-            args.vmaf = False
+    # Check if we can share samples between metrics (identical sampling parameters)
+    sharing_samples = are_sampling_params_equal(args)
 
-    # Generate SSIM2 concatenated reference
-    if args.ssim2:
-        ssim2_sampling = MetricSamplingParams(
-            interval_frames=args.ssim2_interval_frames,
-            region_frames=args.ssim2_region_frames,
+    if sharing_samples:
+        # Generate ONE shared reference file for both metrics
+        log.info(
+            "Using shared samples for VMAF and SSIM2 (identical sampling parameters)"
+        )
+        display.console.print("[cyan]Using shared samples for VMAF and SSIM2[/cyan]")
+
+        shared_sampling = MetricSamplingParams(
+            interval_frames=args.vmaf_interval_frames,  # Same as ssim2
+            region_frames=args.vmaf_region_frames,  # Same as ssim2
             guard_start_frames=guard_start_frames,
             guard_end_frames=guard_end_frames,
             total_frames=total_frames,
         )
-        ssim2_ref_path = generate_metric_reference(
-            metric_type="ssim2",
+        shared_ref_path = generate_metric_reference(
+            metric_type="shared",
             source_path=input_path,
             output_dir=reference_dir,
-            sampling_params=ssim2_sampling,
+            sampling_params=shared_sampling,
             fps=info.fps,
             lossless_profile=lossless_profile,
             video_info=info,
@@ -490,8 +471,68 @@ def run_pipeline(args: PipelineArgs) -> int:
             auto_crop=auto_crop,
             crop_values=crop_values,
         )
-        if ssim2_ref_path is None:
+        if shared_ref_path is None:
+            args.vmaf = False
             args.ssim2 = False
+        else:
+            # Point both metrics to the same reference file
+            vmaf_ref_path = shared_ref_path
+            ssim2_ref_path = shared_ref_path
+    else:
+        # Generate separate references for each metric (different sampling parameters)
+        if args.vmaf:
+            vmaf_sampling = MetricSamplingParams(
+                interval_frames=args.vmaf_interval_frames,
+                region_frames=args.vmaf_region_frames,
+                guard_start_frames=guard_start_frames,
+                guard_end_frames=guard_end_frames,
+                total_frames=total_frames,
+            )
+            vmaf_ref_path = generate_metric_reference(
+                metric_type="vmaf",
+                source_path=input_path,
+                output_dir=reference_dir,
+                sampling_params=vmaf_sampling,
+                fps=info.fps,
+                lossless_profile=lossless_profile,
+                video_info=info,
+                mkvmerge_bin=args.mkvmerge_bin,
+                repo_root=repo_root,
+                temp_dir=temp_dir,
+                display=display,
+                log=log,
+                auto_crop=auto_crop,
+                crop_values=crop_values,
+            )
+            if vmaf_ref_path is None:
+                args.vmaf = False
+
+        if args.ssim2:
+            ssim2_sampling = MetricSamplingParams(
+                interval_frames=args.ssim2_interval_frames,
+                region_frames=args.ssim2_region_frames,
+                guard_start_frames=guard_start_frames,
+                guard_end_frames=guard_end_frames,
+                total_frames=total_frames,
+            )
+            ssim2_ref_path = generate_metric_reference(
+                metric_type="ssim2",
+                source_path=input_path,
+                output_dir=reference_dir,
+                sampling_params=ssim2_sampling,
+                fps=info.fps,
+                lossless_profile=lossless_profile,
+                video_info=info,
+                mkvmerge_bin=args.mkvmerge_bin,
+                repo_root=repo_root,
+                temp_dir=temp_dir,
+                display=display,
+                log=log,
+                auto_crop=auto_crop,
+                crop_values=crop_values,
+            )
+            if ssim2_ref_path is None:
+                args.ssim2 = False
 
     # Build targets (needed for any search module)
     has_quality_targets = has_targets(args)
@@ -537,6 +578,7 @@ def run_pipeline(args: PipelineArgs) -> int:
             display=display,
             log=log,
             crop_values=crop_values,
+            sharing_samples=sharing_samples,
         )
 
         # Detect bitrate vs CRF mode
@@ -608,6 +650,7 @@ def run_pipeline(args: PipelineArgs) -> int:
             display=display,
             log=log,
             crop_values=crop_values,
+            sharing_samples=sharing_samples,
         )
 
         iteration = 0
@@ -807,6 +850,7 @@ def run_pipeline(args: PipelineArgs) -> int:
                 display=display,
                 log=log,
                 crop_values=crop_values,
+                sharing_samples=sharing_samples,
             )
 
         # Run multi-profile search

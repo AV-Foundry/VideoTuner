@@ -214,6 +214,25 @@ def calculate_predicted_bitrate(
     Returns:
         Predicted bitrate in kbps (duration-weighted average if both metrics used)
     """
+    # Shared mode optimization: if both paths point to the same file, only process once
+    if (
+        vmaf_distorted_path
+        and ssim2_distorted_path
+        and vmaf_distorted_path == ssim2_distorted_path
+        and vmaf_distorted_path.exists()
+    ):
+        stats = get_encode_stats(vmaf_distorted_path, ffprobe_bin=ffprobe_bin)
+        if stats:
+            log.debug(
+                "Shared concatenated bitrate: %.0f kbps",
+                stats.bitrate_kbps,
+            )
+            log.info("Predicted bitrate: %.0f kbps", stats.bitrate_kbps)
+            return stats.bitrate_kbps
+        log.warning("No bitrate data available from shared concatenated file")
+        return 0.0
+
+    # Separate mode: process each metric's file
     bitrates: list[tuple[float, float]] = []  # (bitrate_kbps, duration_seconds)
 
     if vmaf_distorted_path and vmaf_distorted_path.exists():
@@ -259,6 +278,101 @@ def calculate_predicted_bitrate(
     return predicted
 
 
+def _encode_crf_metric(
+    ctx: "IterationContext",
+    metric_params: MetricSampleParams,
+    output_path: Path,
+    crf: float,
+    metric_label: str,
+) -> Path | None:
+    """Encode samples for a single metric in CRF mode.
+
+    Handles encoding and muxing with progress display.
+
+    Args:
+        ctx: Pipeline iteration context
+        metric_params: Calculated sampling parameters
+        output_path: Final output path for encoded MKV file
+        crf: CRF value to encode at
+        metric_label: Label for display ("VMAF", "SSIM2", or "Shared")
+
+    Returns:
+        Path to the encoded MKV file, or None if encoding failed
+    """
+    from .create_encodes import encode_x265_concatenated_distorted, mux_hevc_to_mkv
+
+    # Encode to HEVC
+    with ctx.display.stage(
+        f"Encoding {metric_label} samples",
+        total=metric_params.total_frames,
+        unit="frames",
+        transient=True,
+        show_done=True,
+    ) as enc_stage:
+        enc_handler = enc_stage.make_x265_handler(
+            total_frames=metric_params.total_frames
+        )
+
+        try:
+            hevc_path = encode_x265_concatenated_distorted(
+                source_path=ctx.input_path,
+                output_path=output_path,
+                interval_frames=metric_params.interval_frames,
+                region_frames=metric_params.region_frames,
+                guard_start_frames=ctx.guard_start_frames,
+                guard_end_frames=ctx.guard_end_frames,
+                total_frames=ctx.total_frames,
+                fps=ctx.info.fps,
+                profile=ctx.selected_profile,
+                video_info=ctx.info,
+                crf=crf,
+                mkvmerge_bin=ctx.args.mkvmerge_bin,
+                cwd=ctx.repo_root,
+                temp_dir=ctx.temp_dir,
+                line_handler=enc_handler,
+                mux_handler=None,
+                perform_mux=False,
+                enable_autocrop=ctx.args.auto_crop,
+                crop_values=ctx.crop_values,
+                metric_label=metric_label,
+            )
+            ctx.log.info("%s distorted HEVC created: %s", metric_label, hevc_path.name)
+        except Exception as e:
+            ctx.log.error("Failed to create %s distorted encode: %s", metric_label, e)
+            return None
+
+    # Mux HEVC to MKV
+    with ctx.display.stage(
+        f"Muxing {metric_label} samples",
+        total=100,
+        unit="%",
+        transient=True,
+        show_done=True,
+    ) as mux_stage:
+        mux_handler = mux_stage.make_percent_handler()
+
+        try:
+            mux_hevc_to_mkv(
+                hevc_path=hevc_path,
+                output_path=output_path,
+                mkvmerge_bin=ctx.args.mkvmerge_bin,
+                cwd=ctx.repo_root,
+                line_handler=mux_handler,
+            )
+            ctx.log.info(
+                "%s distorted encode created: %s", metric_label, output_path.name
+            )
+            return output_path
+        except Exception as e:
+            ctx.log.error("Failed to mux %s distorted encode: %s", metric_label, e)
+            return None
+        finally:
+            try:
+                hevc_path.unlink()
+            except Exception:
+                pass
+
+
 def run_single_crf_iteration(
     ctx: "IterationContext",
     crf: float,
@@ -277,198 +391,78 @@ def run_single_crf_iteration(
         Tuple of (scores_dict, vmaf_results, ssim2_results, predicted_bitrate_kbps,
                   vmaf_distorted_path, ssim2_distorted_path)
     """
-    from .create_encodes import encode_x265_concatenated_distorted, mux_hevc_to_mkv
     from .pipeline_types import get_distorted_dir
     from .pipeline_validation import validate_assessment_results
     from .utils import log_section
 
     log_section(ctx.log, f"Encoding (CRF {crf:.1f})")
 
-    # Encode VMAF concatenated distorted file
     vmaf_distorted_path: Path | None = None
-    if ctx.args.vmaf and ctx.vmaf_ref_path:
-        vmaf_params = calculate_metric_params(ctx, "vmaf")
-        vmaf_distorted_path = (
-            get_distorted_dir(ctx.workdir, ctx.selected_profile)
-            / f"vmaf_distorted_crf{crf:.1f}_iter{iteration}.mkv"
-        )
-
-        vmaf_hevc_path: Path | None = None
-        with ctx.display.stage(
-            "Encoding VMAF samples",
-            total=vmaf_params.total_frames,
-            unit="frames",
-            transient=True,
-            show_done=True,
-        ) as enc_stage:
-            enc_handler = enc_stage.make_x265_handler(
-                total_frames=vmaf_params.total_frames
-            )
-
-            try:
-                vmaf_hevc_path = encode_x265_concatenated_distorted(
-                    source_path=ctx.input_path,
-                    output_path=vmaf_distorted_path,
-                    interval_frames=vmaf_params.interval_frames,
-                    region_frames=vmaf_params.region_frames,
-                    guard_start_frames=ctx.guard_start_frames,
-                    guard_end_frames=ctx.guard_end_frames,
-                    total_frames=ctx.total_frames,
-                    fps=ctx.info.fps,
-                    profile=ctx.selected_profile,
-                    video_info=ctx.info,
-                    crf=crf,
-                    mkvmerge_bin=ctx.args.mkvmerge_bin,
-                    cwd=ctx.repo_root,
-                    temp_dir=ctx.temp_dir,
-                    line_handler=enc_handler,
-                    mux_handler=None,
-                    perform_mux=False,
-                    enable_autocrop=ctx.args.auto_crop,
-                    crop_values=ctx.crop_values,
-                    metric_label="VMAF",
-                )
-                if vmaf_hevc_path:
-                    ctx.log.info("VMAF distorted HEVC created: %s", vmaf_hevc_path.name)
-            except Exception as e:
-                ctx.log.error("Failed to create VMAF distorted encode: %s", e)
-                ctx.args.vmaf = False
-                vmaf_distorted_path = None
-                if vmaf_hevc_path and vmaf_hevc_path.exists():
-                    try:
-                        vmaf_hevc_path.unlink()
-                    except Exception:
-                        pass
-                vmaf_hevc_path = None
-
-        if vmaf_hevc_path and ctx.args.vmaf:
-            with ctx.display.stage(
-                "Muxing VMAF samples",
-                total=100,
-                unit="%",
-                transient=True,
-                show_done=True,
-            ) as mux_stage:
-                mux_handler = mux_stage.make_percent_handler()
-
-                try:
-                    assert vmaf_distorted_path is not None
-                    mux_hevc_to_mkv(
-                        hevc_path=vmaf_hevc_path,
-                        output_path=vmaf_distorted_path,
-                        mkvmerge_bin=ctx.args.mkvmerge_bin,
-                        cwd=ctx.repo_root,
-                        line_handler=mux_handler,
-                    )
-                    if vmaf_distorted_path:
-                        ctx.log.info(
-                            "VMAF distorted encode created: %s",
-                            vmaf_distorted_path.name,
-                        )
-                except Exception as e:
-                    ctx.log.error("Failed to mux VMAF distorted encode: %s", e)
-                    ctx.args.vmaf = False
-                    vmaf_distorted_path = None
-                finally:
-                    try:
-                        if vmaf_hevc_path.exists():
-                            vmaf_hevc_path.unlink()
-                    except Exception:
-                        pass
-
-    # Encode SSIM2 concatenated distorted file
     ssim2_distorted_path: Path | None = None
-    if ctx.args.ssim2 and ctx.ssim2_ref_path:
-        ssim2_params = calculate_metric_params(ctx, "ssim2")
-        ssim2_distorted_path = (
-            get_distorted_dir(ctx.workdir, ctx.selected_profile)
-            / f"ssim2_distorted_crf{crf:.1f}_iter{iteration}.mkv"
-        )
 
-        ssim2_hevc_path: Path | None = None
-        with ctx.display.stage(
-            "Encoding SSIM2 samples",
-            total=ssim2_params.total_frames,
-            unit="frames",
-            transient=True,
-            show_done=True,
-        ) as enc_stage:
-            enc_handler = enc_stage.make_x265_handler(
-                total_frames=ssim2_params.total_frames
+    if ctx.sharing_samples:
+        # SHARED MODE: Encode once, use for both VMAF and SSIM2
+        if (ctx.args.vmaf or ctx.args.ssim2) and (
+            ctx.vmaf_ref_path or ctx.ssim2_ref_path
+        ):
+            shared_params = calculate_metric_params(ctx, "vmaf")  # Same as ssim2
+            shared_output_path = (
+                get_distorted_dir(ctx.workdir, ctx.selected_profile)
+                / f"shared_distorted_crf{crf:.1f}_iter{iteration}.mkv"
             )
 
-            try:
-                ssim2_hevc_path = encode_x265_concatenated_distorted(
-                    source_path=ctx.input_path,
-                    output_path=ssim2_distorted_path,
-                    interval_frames=ssim2_params.interval_frames,
-                    region_frames=ssim2_params.region_frames,
-                    guard_start_frames=ctx.guard_start_frames,
-                    guard_end_frames=ctx.guard_end_frames,
-                    total_frames=ctx.total_frames,
-                    fps=ctx.info.fps,
-                    profile=ctx.selected_profile,
-                    video_info=ctx.info,
-                    crf=crf,
-                    mkvmerge_bin=ctx.args.mkvmerge_bin,
-                    cwd=ctx.repo_root,
-                    temp_dir=ctx.temp_dir,
-                    line_handler=enc_handler,
-                    mux_handler=None,
-                    perform_mux=False,
-                    enable_autocrop=ctx.args.auto_crop,
-                    crop_values=ctx.crop_values,
-                    metric_label="SSIM2",
-                )
-                if ssim2_hevc_path:
-                    ctx.log.info(
-                        "SSIM2 distorted HEVC created: %s", ssim2_hevc_path.name
-                    )
-            except Exception as e:
-                ctx.log.error("Failed to create SSIM2 distorted encode: %s", e)
+            result = _encode_crf_metric(
+                ctx=ctx,
+                metric_params=shared_params,
+                output_path=shared_output_path,
+                crf=crf,
+                metric_label="Shared",
+            )
+
+            if result:
+                # Point both metrics to the same file
+                vmaf_distorted_path = result
+                ssim2_distorted_path = result
+            else:
+                ctx.args.vmaf = False
                 ctx.args.ssim2 = False
-                ssim2_distorted_path = None
-                if ssim2_hevc_path and ssim2_hevc_path.exists():
-                    try:
-                        ssim2_hevc_path.unlink()
-                    except Exception:
-                        pass
-                ssim2_hevc_path = None
+    else:
+        # SEPARATE MODE: Encode separately for each metric
+        if ctx.args.vmaf and ctx.vmaf_ref_path:
+            vmaf_params = calculate_metric_params(ctx, "vmaf")
+            vmaf_output_path = (
+                get_distorted_dir(ctx.workdir, ctx.selected_profile)
+                / f"vmaf_distorted_crf{crf:.1f}_iter{iteration}.mkv"
+            )
 
-        if ssim2_hevc_path and ctx.args.ssim2:
-            with ctx.display.stage(
-                "Muxing SSIM2 samples",
-                total=100,
-                unit="%",
-                transient=True,
-                show_done=True,
-            ) as mux_stage:
-                mux_handler = mux_stage.make_percent_handler()
+            vmaf_distorted_path = _encode_crf_metric(
+                ctx=ctx,
+                metric_params=vmaf_params,
+                output_path=vmaf_output_path,
+                crf=crf,
+                metric_label="VMAF",
+            )
 
-                try:
-                    assert ssim2_distorted_path is not None
-                    mux_hevc_to_mkv(
-                        hevc_path=ssim2_hevc_path,
-                        output_path=ssim2_distorted_path,
-                        mkvmerge_bin=ctx.args.mkvmerge_bin,
-                        cwd=ctx.repo_root,
-                        line_handler=mux_handler,
-                    )
-                    if ssim2_distorted_path:
-                        ctx.log.info(
-                            "SSIM2 distorted encode created: %s",
-                            ssim2_distorted_path.name,
-                        )
-                except Exception as e:
-                    ctx.log.error("Failed to mux SSIM2 distorted encode: %s", e)
-                    ctx.args.ssim2 = False
-                    ssim2_distorted_path = None
-                finally:
-                    try:
-                        if ssim2_hevc_path.exists():
-                            ssim2_hevc_path.unlink()
-                    except Exception:
-                        pass
+            if vmaf_distorted_path is None:
+                ctx.args.vmaf = False
+
+        if ctx.args.ssim2 and ctx.ssim2_ref_path:
+            ssim2_params = calculate_metric_params(ctx, "ssim2")
+            ssim2_output_path = (
+                get_distorted_dir(ctx.workdir, ctx.selected_profile)
+                / f"ssim2_distorted_crf{crf:.1f}_iter{iteration}.mkv"
+            )
+
+            ssim2_distorted_path = _encode_crf_metric(
+                ctx=ctx,
+                metric_params=ssim2_params,
+                output_path=ssim2_output_path,
+                crf=crf,
+                metric_label="SSIM2",
+            )
+
+            if ssim2_distorted_path is None:
+                ctx.args.ssim2 = False
 
     log_section(ctx.log, f"Assessment (CRF {crf:.1f})")
 
@@ -555,114 +549,182 @@ def run_single_bitrate_iteration(
         else:
             ctx.log.info("2-pass encoding: Pass 1 (analysis) -> Pass 2 (final)")
 
-    # Create separate stats files for VMAF and SSIM2 (they encode different frame patterns)
-    vmaf_stats_file: Path | None = None
-    ssim2_stats_file: Path | None = None
-    if is_multipass:
-        vmaf_stats_file = ctx.workdir / f"{ctx.input_path.stem}_bitrate_stats_vmaf"
-        ssim2_stats_file = ctx.workdir / f"{ctx.input_path.stem}_bitrate_stats_ssim2"
-
-    # Create analysis files if multi-pass optimization is enabled
-    vmaf_analysis_file: Path | None = None
-    ssim2_analysis_file: Path | None = None
-    has_multipass_opt = profile.settings.get(
-        "multi-pass-opt-analysis", False
-    ) or profile.settings.get("multi-pass-opt-distortion", False)
-    if is_multipass and has_multipass_opt:
-        vmaf_analysis_file = (
-            ctx.workdir / f"{ctx.input_path.stem}_bitrate_analysis_vmaf.dat"
-        )
-        ssim2_analysis_file = (
-            ctx.workdir / f"{ctx.input_path.stem}_bitrate_analysis_ssim2.dat"
-        )
-
-    # Encode VMAF concatenated distorted file
     vmaf_distorted_path: Path | None = None
-    if ctx.args.vmaf and ctx.vmaf_ref_path:
-        vmaf_params = calculate_metric_params(ctx, "vmaf")
-        vmaf_distorted_path = (
-            get_distorted_dir(ctx.workdir, profile)
-            / f"vmaf_distorted_bitrate{bitrate_kbps}_iter{iteration}.mkv"
-        )
-
-        ctx.log.debug(
-            "VMAF encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
-            bitrate_kbps,
-            is_multipass,
-            pass_num,
-            vmaf_params.total_frames,
-        )
-
-        try:
-            vmaf_distorted_path = _encode_bitrate_metric(
-                ctx=ctx,
-                metric_params=vmaf_params,
-                output_path=vmaf_distorted_path,
-                profile=profile,
-                pass_num=pass_num,
-                is_multipass=is_multipass,
-                stats_file=vmaf_stats_file,
-                analysis_file=vmaf_analysis_file,
-                metric_label="VMAF",
-            )
-            if vmaf_distorted_path:
-                ctx.log.info(
-                    "VMAF distorted bitrate encode created: %s",
-                    vmaf_distorted_path.name,
-                )
-        except ProfileError:
-            raise
-        except Exception as e:
-            import traceback
-
-            ctx.log.error("VMAF encoding failed: %s", e)
-            ctx.log.debug("Traceback:\n%s", traceback.format_exc())
-            ctx.args.vmaf = False
-            vmaf_distorted_path = None
-
-    # Encode SSIM2 concatenated distorted file
     ssim2_distorted_path: Path | None = None
-    if ctx.args.ssim2 and ctx.ssim2_ref_path:
-        ssim2_params = calculate_metric_params(ctx, "ssim2")
-        ssim2_distorted_path = (
-            get_distorted_dir(ctx.workdir, profile)
-            / f"ssim2_distorted_bitrate{bitrate_kbps}_iter{iteration}.mkv"
-        )
 
-        ctx.log.debug(
-            "SSIM2 encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
-            bitrate_kbps,
-            is_multipass,
-            pass_num,
-            ssim2_params.total_frames,
-        )
-
-        try:
-            ssim2_distorted_path = _encode_bitrate_metric(
-                ctx=ctx,
-                metric_params=ssim2_params,
-                output_path=ssim2_distorted_path,
-                profile=profile,
-                pass_num=pass_num,
-                is_multipass=is_multipass,
-                stats_file=ssim2_stats_file,
-                analysis_file=ssim2_analysis_file,
-                metric_label="SSIM2",
+    if ctx.sharing_samples:
+        # SHARED MODE: Encode once, use for both VMAF and SSIM2
+        # Create shared stats/analysis files for multi-pass
+        shared_stats_file: Path | None = None
+        shared_analysis_file: Path | None = None
+        if is_multipass:
+            shared_stats_file = (
+                ctx.workdir / f"{ctx.input_path.stem}_bitrate_stats_shared"
             )
-            if ssim2_distorted_path:
-                ctx.log.info(
-                    "SSIM2 distorted bitrate encode created: %s",
-                    ssim2_distorted_path.name,
-                )
-        except ProfileError:
-            raise
-        except Exception as e:
-            import traceback
+        has_multipass_opt = profile.settings.get(
+            "multi-pass-opt-analysis", False
+        ) or profile.settings.get("multi-pass-opt-distortion", False)
+        if is_multipass and has_multipass_opt:
+            shared_analysis_file = (
+                ctx.workdir / f"{ctx.input_path.stem}_bitrate_analysis_shared.dat"
+            )
 
-            ctx.log.error("SSIM2 encoding failed: %s", e)
-            ctx.log.debug("Traceback:\n%s", traceback.format_exc())
-            ctx.args.ssim2 = False
-            ssim2_distorted_path = None
+        if (ctx.args.vmaf or ctx.args.ssim2) and (
+            ctx.vmaf_ref_path or ctx.ssim2_ref_path
+        ):
+            shared_params = calculate_metric_params(ctx, "vmaf")  # Same as ssim2
+            shared_distorted_path = (
+                get_distorted_dir(ctx.workdir, profile)
+                / f"shared_distorted_bitrate{bitrate_kbps}_iter{iteration}.mkv"
+            )
+
+            ctx.log.debug(
+                "Shared encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
+                bitrate_kbps,
+                is_multipass,
+                pass_num,
+                shared_params.total_frames,
+            )
+
+            try:
+                shared_distorted_path = _encode_bitrate_metric(
+                    ctx=ctx,
+                    metric_params=shared_params,
+                    output_path=shared_distorted_path,
+                    profile=profile,
+                    pass_num=pass_num,
+                    is_multipass=is_multipass,
+                    stats_file=shared_stats_file,
+                    analysis_file=shared_analysis_file,
+                    metric_label="Shared",
+                )
+                if shared_distorted_path:
+                    ctx.log.info(
+                        "Shared distorted bitrate encode created: %s",
+                        shared_distorted_path.name,
+                    )
+                    # Point both metrics to the same file
+                    vmaf_distorted_path = shared_distorted_path
+                    ssim2_distorted_path = shared_distorted_path
+            except ProfileError:
+                raise
+            except Exception as e:
+                import traceback
+
+                ctx.log.error("Shared encoding failed: %s", e)
+                ctx.log.debug("Traceback:\n%s", traceback.format_exc())
+                ctx.args.vmaf = False
+                ctx.args.ssim2 = False
+    else:
+        # SEPARATE MODE: Encode separately for each metric
+        # Create separate stats files for VMAF and SSIM2 (different frame patterns)
+        vmaf_stats_file: Path | None = None
+        ssim2_stats_file: Path | None = None
+        if is_multipass:
+            vmaf_stats_file = ctx.workdir / f"{ctx.input_path.stem}_bitrate_stats_vmaf"
+            ssim2_stats_file = (
+                ctx.workdir / f"{ctx.input_path.stem}_bitrate_stats_ssim2"
+            )
+
+        # Create analysis files if multi-pass optimization is enabled
+        vmaf_analysis_file: Path | None = None
+        ssim2_analysis_file: Path | None = None
+        has_multipass_opt = profile.settings.get(
+            "multi-pass-opt-analysis", False
+        ) or profile.settings.get("multi-pass-opt-distortion", False)
+        if is_multipass and has_multipass_opt:
+            vmaf_analysis_file = (
+                ctx.workdir / f"{ctx.input_path.stem}_bitrate_analysis_vmaf.dat"
+            )
+            ssim2_analysis_file = (
+                ctx.workdir / f"{ctx.input_path.stem}_bitrate_analysis_ssim2.dat"
+            )
+
+        # Encode VMAF concatenated distorted file
+        if ctx.args.vmaf and ctx.vmaf_ref_path:
+            vmaf_params = calculate_metric_params(ctx, "vmaf")
+            vmaf_distorted_path = (
+                get_distorted_dir(ctx.workdir, profile)
+                / f"vmaf_distorted_bitrate{bitrate_kbps}_iter{iteration}.mkv"
+            )
+
+            ctx.log.debug(
+                "VMAF encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
+                bitrate_kbps,
+                is_multipass,
+                pass_num,
+                vmaf_params.total_frames,
+            )
+
+            try:
+                vmaf_distorted_path = _encode_bitrate_metric(
+                    ctx=ctx,
+                    metric_params=vmaf_params,
+                    output_path=vmaf_distorted_path,
+                    profile=profile,
+                    pass_num=pass_num,
+                    is_multipass=is_multipass,
+                    stats_file=vmaf_stats_file,
+                    analysis_file=vmaf_analysis_file,
+                    metric_label="VMAF",
+                )
+                if vmaf_distorted_path:
+                    ctx.log.info(
+                        "VMAF distorted bitrate encode created: %s",
+                        vmaf_distorted_path.name,
+                    )
+            except ProfileError:
+                raise
+            except Exception as e:
+                import traceback
+
+                ctx.log.error("VMAF encoding failed: %s", e)
+                ctx.log.debug("Traceback:\n%s", traceback.format_exc())
+                ctx.args.vmaf = False
+                vmaf_distorted_path = None
+
+        # Encode SSIM2 concatenated distorted file
+        if ctx.args.ssim2 and ctx.ssim2_ref_path:
+            ssim2_params = calculate_metric_params(ctx, "ssim2")
+            ssim2_distorted_path = (
+                get_distorted_dir(ctx.workdir, profile)
+                / f"ssim2_distorted_bitrate{bitrate_kbps}_iter{iteration}.mkv"
+            )
+
+            ctx.log.debug(
+                "SSIM2 encode: bitrate=%d kbps, multipass=%s, pass=%d, frames=%d",
+                bitrate_kbps,
+                is_multipass,
+                pass_num,
+                ssim2_params.total_frames,
+            )
+
+            try:
+                ssim2_distorted_path = _encode_bitrate_metric(
+                    ctx=ctx,
+                    metric_params=ssim2_params,
+                    output_path=ssim2_distorted_path,
+                    profile=profile,
+                    pass_num=pass_num,
+                    is_multipass=is_multipass,
+                    stats_file=ssim2_stats_file,
+                    analysis_file=ssim2_analysis_file,
+                    metric_label="SSIM2",
+                )
+                if ssim2_distorted_path:
+                    ctx.log.info(
+                        "SSIM2 distorted bitrate encode created: %s",
+                        ssim2_distorted_path.name,
+                    )
+            except ProfileError:
+                raise
+            except Exception as e:
+                import traceback
+
+                ctx.log.error("SSIM2 encoding failed: %s", e)
+                ctx.log.debug("Traceback:\n%s", traceback.format_exc())
+                ctx.args.ssim2 = False
+                ssim2_distorted_path = None
 
     # Run assessments using shared helpers
     log_section(ctx.log, "Quality Assessment")

@@ -532,12 +532,12 @@ Run `videotuner --help` for complete options. Key options include:
 
 ### Sampling Parameters
 
-| Option                    | Default | Description                                             |
-| ------------------------- | ------- | ------------------------------------------------------- |
-| `--vmaf-interval-frames`  | `1600`  | Sample every N frames for VMAF (~1 minute at 24fps)     |
-| `--vmaf-region-frames`    | `20`    | Consecutive frames per VMAF sample                      |
-| `--ssim2-interval-frames` | `8000`  | Sample every N frames for SSIM2 (~5.5 minutes at 24fps) |
-| `--ssim2-region-frames`   | `10`    | Consecutive frames per SSIM2 sample                     |
+| Option                    | Default | Description                         |
+| ------------------------- | ------- | ----------------------------------- |
+| `--vmaf-interval-frames`  | `1600`  | Sample every N frames for VMAF      |
+| `--vmaf-region-frames`    | `20`    | Consecutive frames per VMAF sample  |
+| `--ssim2-interval-frames` | `1600`  | Sample every N frames for SSIM2     |
+| `--ssim2-region-frames`   | `20`    | Consecutive frames per SSIM2 sample |
 
 ### Analysis Options
 
@@ -545,7 +545,7 @@ Run `videotuner --help` for complete options. Key options include:
 | -------------- | ------- | ---------------------------------------------------------- |
 | `--no-vmaf`    | -       | Disable VMAF assessment                                    |
 | `--no-ssim2`   | -       | Disable SSIMULACRA2 assessment                             |
-| `--vmaf-model` | auto    | VMAF model name or path (auto-selects based on resolution) |
+| `--vmaf-model` | `auto`  | VMAF model name or path (auto-selects based on resolution) |
 | `--tonemap`    | `auto`  | HDR tonemapping: auto\|force\|off                          |
 
 ### Guard Bands
