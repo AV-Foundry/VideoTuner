@@ -1,8 +1,14 @@
 """Version information and release notes for VideoTuner."""
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 RELEASE_NOTES = """
+## 0.2.1
+
+### Features
+
+- Optimize encoding by sharing samples when VMAF and SSIM2 use identical sampling parameters (default behavior)
+
 ## 0.2.0
 
 ### Breaking Changes
