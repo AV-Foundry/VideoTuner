@@ -12,10 +12,31 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
+    from .pipeline_cli import PipelineArgs
     from .progress import PipelineDisplay
     from .encoding_utils import CropValues
     from .media import VideoInfo
     from .profiles import Profile
+
+
+def are_sampling_params_equal(args: "PipelineArgs") -> bool:
+    """Check if VMAF and SSIM2 sampling parameters are identical.
+
+    Returns True if both metrics are enabled AND their interval_frames
+    and region_frames match, enabling shared sample generation.
+
+    Args:
+        args: Pipeline arguments containing sampling configuration
+
+    Returns:
+        True if samples can be shared between metrics
+    """
+    return (
+        args.vmaf
+        and args.ssim2
+        and args.vmaf_interval_frames == args.ssim2_interval_frames
+        and args.vmaf_region_frames == args.ssim2_region_frames
+    )
 
 
 @dataclass(frozen=True)
@@ -54,7 +75,7 @@ class MetricSamplingParams:
 
 
 def generate_metric_reference(
-    metric_type: Literal["vmaf", "ssim2"],
+    metric_type: Literal["vmaf", "ssim2", "shared"],
     source_path: Path,
     output_dir: Path,
     sampling_params: MetricSamplingParams,
@@ -95,7 +116,9 @@ def generate_metric_reference(
     """
     from .create_encodes import encode_x265_concatenated_reference, mux_hevc_to_mkv
 
-    metric_upper = metric_type.upper()
+    metric_label = (
+        metric_type.title() if metric_type == "shared" else metric_type.upper()
+    )
     ref_path = output_dir / f"{metric_type}_reference_concatenated.mkv"
     total_frames = sampling_params.total_sample_frames
 
@@ -103,7 +126,7 @@ def generate_metric_reference(
 
     # Encode reference HEVC
     with display.stage(
-        f"Encoding {metric_upper} reference",
+        f"Encoding {metric_label} reference",
         total=total_frames,
         unit="frames",
         transient=True,
@@ -131,15 +154,15 @@ def generate_metric_reference(
                 perform_mux=False,
                 enable_autocrop=auto_crop,
                 crop_values=crop_values,
-                metric_label=metric_upper,
+                metric_label=metric_label,
             )
             log.info(
                 "%s concatenated reference HEVC created: %s",
-                metric_upper,
+                metric_label,
                 hevc_path.name,
             )
         except Exception as e:
-            log.error("Failed to create %s reference: %s", metric_upper, e)
+            log.error("Failed to create %s reference: %s", metric_label, e)
             _cleanup_hevc(hevc_path)
             return None
 
@@ -148,7 +171,7 @@ def generate_metric_reference(
 
     # Mux HEVC to MKV
     with display.stage(
-        f"Muxing {metric_upper} reference",
+        f"Muxing {metric_label} reference",
         total=100,
         unit="%",
         transient=True,
@@ -166,11 +189,11 @@ def generate_metric_reference(
             )
             log.info(
                 "%s concatenated reference created: %s",
-                metric_upper,
+                metric_label,
                 ref_path.name,
             )
         except Exception as e:
-            log.error("Failed to mux %s reference: %s", metric_upper, e)
+            log.error("Failed to mux %s reference: %s", metric_label, e)
             return None
         finally:
             _cleanup_hevc(hevc_path)

@@ -53,6 +53,9 @@ class IterationContext:
     # Autocrop values (calculated once, shared across all encodes)
     crop_values: CropValues | None = None
 
+    # Sample sharing: True when VMAF and SSIM2 use identical sampling parameters
+    sharing_samples: bool = False
+
     @property
     def usable_frames(self) -> int:
         """Number of frames available for sampling (excluding guard bands)."""

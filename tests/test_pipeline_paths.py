@@ -1,11 +1,15 @@
-"""Tests for pipeline path management utilities."""
+"""Tests for pipeline path management utilities and types."""
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
+from unittest.mock import MagicMock
 
+from videotuner.pipeline_cli import PipelineArgs
 from videotuner.pipeline_types import (
+    IterationContext,
     get_distorted_dir,
     get_reference_dir,
     get_ssim2_dir,
@@ -269,3 +273,109 @@ class TestPathConsistency:
             assert "Film_High_Quality" in str(dist_dir)
             assert "Film_High_Quality" in str(vmaf_dir)
             assert "Film_High_Quality" in str(ssim2_dir)
+
+
+class TestIterationContext:
+    """Tests for IterationContext dataclass."""
+
+    def test_sharing_samples_defaults_to_false(self):
+        """Test that sharing_samples defaults to False."""
+        ctx = IterationContext(
+            input_path=Path("test.mkv"),
+            workdir=Path("/tmp/work"),
+            temp_dir=Path("/tmp/temp"),
+            repo_root=Path("/repo"),
+            info=MagicMock(),
+            selected_profile=Profile(name="Test", description="Test", settings={}),
+            total_frames=10000,
+            guard_start_frames=100,
+            guard_end_frames=100,
+            vmaf_ref_path=None,
+            ssim2_ref_path=None,
+            args=PipelineArgs(input=Path("test.mkv"), output=Path("output.mkv")),
+            display=MagicMock(),
+            log=logging.getLogger("test"),
+        )
+        assert ctx.sharing_samples is False
+
+    def test_sharing_samples_can_be_set_true(self):
+        """Test that sharing_samples can be set to True."""
+        ctx = IterationContext(
+            input_path=Path("test.mkv"),
+            workdir=Path("/tmp/work"),
+            temp_dir=Path("/tmp/temp"),
+            repo_root=Path("/repo"),
+            info=MagicMock(),
+            selected_profile=Profile(name="Test", description="Test", settings={}),
+            total_frames=10000,
+            guard_start_frames=100,
+            guard_end_frames=100,
+            vmaf_ref_path=None,
+            ssim2_ref_path=None,
+            args=PipelineArgs(input=Path("test.mkv"), output=Path("output.mkv")),
+            display=MagicMock(),
+            log=logging.getLogger("test"),
+            sharing_samples=True,
+        )
+        assert ctx.sharing_samples is True
+
+    def test_usable_frames_calculation(self):
+        """Test usable_frames property excludes guard bands."""
+        ctx = IterationContext(
+            input_path=Path("test.mkv"),
+            workdir=Path("/tmp/work"),
+            temp_dir=Path("/tmp/temp"),
+            repo_root=Path("/repo"),
+            info=MagicMock(),
+            selected_profile=Profile(name="Test", description="Test", settings={}),
+            total_frames=10000,
+            guard_start_frames=100,
+            guard_end_frames=200,
+            vmaf_ref_path=None,
+            ssim2_ref_path=None,
+            args=PipelineArgs(input=Path("test.mkv"), output=Path("output.mkv")),
+            display=MagicMock(),
+            log=logging.getLogger("test"),
+        )
+        # usable = 10000 - 100 - 200 = 9700
+        assert ctx.usable_frames == 9700
+
+    def test_usable_frames_with_no_guards(self):
+        """Test usable_frames equals total when no guard bands."""
+        ctx = IterationContext(
+            input_path=Path("test.mkv"),
+            workdir=Path("/tmp/work"),
+            temp_dir=Path("/tmp/temp"),
+            repo_root=Path("/repo"),
+            info=MagicMock(),
+            selected_profile=Profile(name="Test", description="Test", settings={}),
+            total_frames=10000,
+            guard_start_frames=0,
+            guard_end_frames=0,
+            vmaf_ref_path=None,
+            ssim2_ref_path=None,
+            args=PipelineArgs(input=Path("test.mkv"), output=Path("output.mkv")),
+            display=MagicMock(),
+            log=logging.getLogger("test"),
+        )
+        assert ctx.usable_frames == 10000
+
+    def test_crop_values_defaults_to_none(self):
+        """Test that crop_values defaults to None."""
+        ctx = IterationContext(
+            input_path=Path("test.mkv"),
+            workdir=Path("/tmp/work"),
+            temp_dir=Path("/tmp/temp"),
+            repo_root=Path("/repo"),
+            info=MagicMock(),
+            selected_profile=Profile(name="Test", description="Test", settings={}),
+            total_frames=10000,
+            guard_start_frames=100,
+            guard_end_frames=100,
+            vmaf_ref_path=None,
+            ssim2_ref_path=None,
+            args=PipelineArgs(input=Path("test.mkv"), output=Path("output.mkv")),
+            display=MagicMock(),
+            log=logging.getLogger("test"),
+        )
+        assert ctx.crop_values is None
