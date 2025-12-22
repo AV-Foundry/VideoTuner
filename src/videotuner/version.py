@@ -1,8 +1,23 @@
 """Version information and release notes for VideoTuner."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 RELEASE_NOTES = """
+## 0.2.0
+
+### Breaking Changes
+
+- Removed `--ssim2-bin` CLI argument; ssimulacra2_rs is no longer supported
+
+### Features
+
+- Migrate SSIMULACRA2 to vszip VapourSynth plugin for improved performance and integration
+- Align SSIM2 sampling defaults with VMAF parameters for consistent sample density
+
+### Build
+
+- Externalize bundled dependencies to auto-download at build time with SHA256 verification
+
 ## 0.1.0
 
 Initial release.
