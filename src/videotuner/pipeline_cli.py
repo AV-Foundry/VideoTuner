@@ -30,8 +30,8 @@ class PipelineArgs:
     # Periodic sampling parameters
     vmaf_interval_frames: int = 1600
     vmaf_region_frames: int = 20
-    ssim2_interval_frames: int = 8000
-    ssim2_region_frames: int = 10
+    ssim2_interval_frames: int = 1600
+    ssim2_region_frames: int = 20
 
     ffmpeg_bin: str = "ffmpeg"
     ffprobe_bin: str = "ffprobe"
