@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -38,7 +39,61 @@ LSMASH_URL = f"https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works/rele
 
 VSZIP_VERSION = "R11"
 VSZIP_URL = f"https://github.com/dnjulek/vapoursynth-zip/releases/download/{VSZIP_VERSION}/vapoursynth-zip-r11-windows-x86_64.zip"
+# External dependency URLs and versions
+# x265 encoder
+X265_VERSION = "4.1+191+33"
+X265_URL = "https://github.com/Patman86/x265-Mod-by-Patman/releases/download/4.1%2B191%2B33/x265-4.1+191+33-61d0a57b3-.Mod-by-Patman.-x64-avx2-clang2111.7z"
+
+# VapourSynth portable environment
+VAPOURSYNTH_VERSION = "R72"
+VAPOURSYNTH_INSTALLER_URL = f"https://github.com/vapoursynth/vapoursynth/releases/download/{VAPOURSYNTH_VERSION}/Install-Portable-VapourSynth-{VAPOURSYNTH_VERSION}.ps1"
+
+# VapourSynth plugins (all x64)
+FFMS2_VERSION = "5.0"
+FFMS2_URL = f"https://github.com/FFMS/ffms2/releases/download/{FFMS2_VERSION}/ffms2-{FFMS2_VERSION}-msvc.7z"
+
+LSMASH_VERSION = "1266.0.0.0"
+LSMASH_URL = f"https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works/releases/download/{LSMASH_VERSION}/L-SMASH-Works-r{LSMASH_VERSION}.7z"
+
+VSZIP_VERSION = "R11"
+VSZIP_URL = f"https://github.com/dnjulek/vapoursynth-zip/releases/download/{VSZIP_VERSION}/vapoursynth-zip-r11-windows-x86_64.zip"
 VSZIP_DLL = "vszip.dll"
+
+# SHA256 checksums for integrity verification (protects against compromised downloads)
+# To update: download file, run: python -c "import hashlib; print(hashlib.sha256(open('file','rb').read()).hexdigest())"
+CHECKSUMS = {
+    "vapoursynth_installer": "ac9faf0f009f81fe108018b1ca424355627b93c145bee43f7f8ef62279fa5170",
+    "x265": "97de51546e6f76365c3fd7900205d376ada87a45b7877c4fec9df6a25b1fd592",
+    "ffms2": "e867a3df7262865107df40f230f5b8e1455905eba9b8852e6f35b1227537caeb",
+    "lsmash": "7189f299730c82e2cef025082095628c1028effb7e7276eae5fb5c9c3f1aef00",
+    "vszip": "99cfaba01ce50d414dfd371d8c9b261f164e398a98b49bed2983fa770a143cdd",
+}
+
+
+def verify_checksum(file_path: Path, expected_hash: str, name: str) -> None:
+    """Verify SHA256 checksum of a downloaded file.
+
+    Args:
+        file_path: Path to the file to verify
+        expected_hash: Expected SHA256 hex digest
+        name: Human-readable name for error messages
+
+    Raises:
+        SystemExit: If checksum doesn't match
+    """
+    if expected_hash == "PLACEHOLDER":
+        # Skip verification if hash not yet set - print actual hash for user to add
+        actual = hashlib.sha256(file_path.read_bytes()).hexdigest()
+        print(f"  WARNING: No checksum for {name}. Actual SHA256: {actual}")
+        return
+
+    actual = hashlib.sha256(file_path.read_bytes()).hexdigest()
+    if actual != expected_hash:
+        print(f"ERROR: Checksum mismatch for {name}!")
+        print(f"  Expected: {expected_hash}")
+        print(f"  Actual:   {actual}")
+        print("This could indicate a compromised or corrupted download.")
+        sys.exit(1)
 
 # SHA256 checksums for integrity verification (protects against compromised downloads)
 # To update: download file, run: python -c "import hashlib; print(hashlib.sha256(open('file','rb').read()).hexdigest())"
@@ -167,6 +222,8 @@ def download_vszip(plugin_dir: Path) -> None:
         except Exception as e:
             print(f"ERROR: Failed to download vszip: {e}")
             sys.exit(1)
+
+        verify_checksum(zip_path, CHECKSUMS["vszip"], "vszip")
 
         verify_checksum(zip_path, CHECKSUMS["vszip"], "vszip")
 
@@ -389,6 +446,7 @@ def assemble_release(exe_path: Path) -> None:
     _ = shutil.copy2(exe_path, RELEASE_DIR / "VideoTuner.exe")
 
     # Install vapoursynth-portable from official source (needed for 7z.exe)
+    # Install vapoursynth-portable from official source (needed for 7z.exe)
     vs_dst = RELEASE_DIR / "vapoursynth-portable"
     install_vapoursynth_portable(vs_dst)
     sevenzip_exe = vs_dst / "7z.exe"
@@ -397,7 +455,20 @@ def assemble_release(exe_path: Path) -> None:
     tools_dst = RELEASE_DIR / "tools"
     tools_dst.mkdir(parents=True, exist_ok=True)
     download_x265(tools_dst, sevenzip_exe)
+    install_vapoursynth_portable(vs_dst)
+    sevenzip_exe = vs_dst / "7z.exe"
 
+    # Download x265 encoder to tools folder
+    tools_dst = RELEASE_DIR / "tools"
+    tools_dst.mkdir(parents=True, exist_ok=True)
+    download_x265(tools_dst, sevenzip_exe)
+
+    # Download plugins to the plugin directory
+    plugin_dir = vs_dst / "vs-plugins"
+    plugin_dir.mkdir(parents=True, exist_ok=True)
+    download_ffms2(plugin_dir, sevenzip_exe)
+    download_lsmashsource(plugin_dir, sevenzip_exe)
+    download_vszip(plugin_dir)
     # Download plugins to the plugin directory
     plugin_dir = vs_dst / "vs-plugins"
     plugin_dir.mkdir(parents=True, exist_ok=True)
