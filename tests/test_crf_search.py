@@ -233,3 +233,39 @@ class TestQualityTarget:
         target = QualityTarget("vmaf_mean", 99.0, current_value=99.0)
         assert target.is_met()
         assert target.delta() == 0.0
+
+        # Value that rounds up to target (98.996 -> 99.00 when displayed)
+        # Should pass because display shows 99.00 >= 99.00
+        target_rounds_up = QualityTarget("vmaf_mean", 99.0, current_value=98.996)
+        assert target_rounds_up.is_met()
+
+        # Value that rounds down and just misses (98.994 -> 98.99 when displayed)
+        # Should fail because display shows 98.99 < 99.00
+        target_rounds_down = QualityTarget("vmaf_mean", 99.0, current_value=98.994)
+        assert not target_rounds_down.is_met()
+
+    def test_metric_decimals_custom_precision(self):
+        """Test that custom metric_decimals precision works correctly."""
+        # With 3 decimal places, 98.9996 rounds to 99.000 and passes
+        target_3dp_pass = QualityTarget(
+            "vmaf_mean", 99.0, current_value=98.9996, metric_decimals=3
+        )
+        assert target_3dp_pass.is_met()
+
+        # With 3 decimal places, 98.9994 rounds to 98.999 and fails
+        target_3dp_fail = QualityTarget(
+            "vmaf_mean", 99.0, current_value=98.9994, metric_decimals=3
+        )
+        assert not target_3dp_fail.is_met()
+
+        # With 1 decimal place, 98.96 rounds to 99.0 and passes
+        target_1dp_pass = QualityTarget(
+            "vmaf_mean", 99.0, current_value=98.96, metric_decimals=1
+        )
+        assert target_1dp_pass.is_met()
+
+        # With 1 decimal place, 98.94 rounds to 98.9 and fails
+        target_1dp_fail = QualityTarget(
+            "vmaf_mean", 99.0, current_value=98.94, metric_decimals=1
+        )
+        assert not target_1dp_fail.is_met()

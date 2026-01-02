@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Protocol
 from rich.console import Console
 from rich.table import Table
 
+from .constants import METRIC_DECIMALS
 from .crf_search import QualityTarget
 from .pipeline_cli import DEFAULT_CRF_START_VALUE, DEFAULT_CRF_INTERVAL, get_default
 
@@ -206,6 +207,7 @@ def display_assessment_summary(
     iteration: int | None = None,
     targets_only: bool = False,
     custom_title: str | None = None,
+    metric_decimals: int = METRIC_DECIMALS,
 ) -> None:
     """Display assessment summary with optional target annotations.
 
@@ -216,6 +218,7 @@ def display_assessment_summary(
         iteration: Optional iteration number (None for final display)
         targets_only: If True, only show metrics that are targets (for iteration displays)
         custom_title: Optional custom title (overrides iteration-based title)
+        metric_decimals: Decimal places for metric display (default: METRIC_DECIMALS)
     """
     # Build target lookup
     target_map = {}
@@ -281,15 +284,16 @@ def display_assessment_summary(
         has_rows = True
 
         if target is not None and has_targets:
-            # This is a target metric
+            # This is a target metric - use target's metric_decimals
+            decimals = target.metric_decimals
             delta = target.delta()
-            delta_str = f"{delta:+.2f}" if delta is not None else "N/A"
+            delta_str = f"{delta:+.{decimals}f}" if delta is not None else "N/A"
 
             if target.is_met():
                 # Target met: green
                 table.add_row(
                     display_name,
-                    f"[bold green]{value:.2f}[/bold green]",
+                    f"[bold green]{value:.{decimals}f}[/bold green]",
                     "[green]✓[/green]",
                     delta_str,
                 )
@@ -297,13 +301,13 @@ def display_assessment_summary(
                 # Target not met: red
                 table.add_row(
                     display_name,
-                    f"[bold red]{value:.2f}[/bold red]",
+                    f"[bold red]{value:.{decimals}f}[/bold red]",
                     "[red]✗[/red]",
                     delta_str,
                 )
         else:
             # Not a target: default color (only metric and value when no targets)
-            table.add_row(display_name, f"[cyan]{value:.2f}[/cyan]")
+            table.add_row(display_name, f"[cyan]{value:.{metric_decimals}f}[/cyan]")
 
     # Only print table if it has rows
     if has_rows:
@@ -392,6 +396,7 @@ def display_multi_profile_results(
     console: Console,
     results: list[MultiProfileResult],
     targets: list[QualityTarget],
+    metric_decimals: int = METRIC_DECIMALS,
 ) -> None:
     """Display ranked multi-profile search results (transposed: metrics as rows, profiles as columns).
 
@@ -399,6 +404,7 @@ def display_multi_profile_results(
         console: Rich console for output
         results: Sorted list of profile results (best first)
         targets: Quality targets that were set
+        metric_decimals: Decimal places for metric display (default: METRIC_DECIMALS)
     """
     if not results:
         return
@@ -474,11 +480,19 @@ def display_multi_profile_results(
         # Check if this metric is a target
         is_target = any(t.metric_name == metric_key for t in targets)
 
+        # Get decimals from target if this is a target metric, else use parameter
+        target_for_metric = next(
+            (t for t in targets if t.metric_name == metric_key), None
+        )
+        decimals = (
+            target_for_metric.metric_decimals if target_for_metric else metric_decimals
+        )
+
         for rank, result in enumerate(results, 1):
             value = result.scores.get(metric_key)
 
             if value is not None:
-                formatted_value = f"{value:.2f}"
+                formatted_value = f"{value:.{decimals}f}"
                 # Add checkmark if target is met (CRF profiles only)
                 if is_target and not result.is_bitrate_mode:
                     target = next(

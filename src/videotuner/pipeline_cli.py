@@ -13,6 +13,8 @@ from dataclasses import dataclass, fields, MISSING
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from .constants import METRIC_DECIMALS
+
 if TYPE_CHECKING:
     from .profiles import Profile
 
@@ -73,6 +75,7 @@ class PipelineArgs:
     vs_plugin_dir: Path | None = None
     auto_crop: bool = True
     predicted_bitrate_warning_percent: float | None = None
+    metric_decimals: int = METRIC_DECIMALS
 
     log_file: str | Path | None = None
     quiet: bool = False
@@ -340,6 +343,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
 
     # -------------------------------------------------------------------------
+    # Display
+    # -------------------------------------------------------------------------
+    display_group = p.add_argument_group("Display")
+    _ = display_group.add_argument(
+        "--metric-decimals",
+        type=int,
+        metavar="N",
+        default=_get_default("metric_decimals"),
+        help=f"Decimal places for metric display and comparison (default: {_get_default('metric_decimals')})",
+    )
+
+    # -------------------------------------------------------------------------
     # Paths
     # -------------------------------------------------------------------------
     paths_group = p.add_argument_group("Paths")
@@ -576,6 +591,20 @@ def validate_bitrate_warning_args(
             )
 
 
+def validate_metric_decimals_args(
+    args: PipelineArgs, parser: argparse.ArgumentParser
+) -> None:
+    """Validate metric decimals is a reasonable positive integer."""
+    if args.metric_decimals < 0:
+        parser.error(
+            f"--metric-decimals must be non-negative (got {args.metric_decimals})"
+        )
+    if args.metric_decimals > 10:
+        parser.error(
+            f"--metric-decimals must be at most 10 (got {args.metric_decimals})"
+        )
+
+
 def _resolve_multi_profile_search(
     args: PipelineArgs,
     parser: argparse.ArgumentParser,
@@ -744,6 +773,7 @@ def validate_args(
     has_quality_targets = _has_targets(args)
     validate_mode_args(args, parser, has_quality_targets)
     validate_bitrate_warning_args(args, parser)
+    validate_metric_decimals_args(args, parser)
 
     # Validate that profile/preset/multi-profile-search is specified
     if args.profile is None and args.preset is None and not args.multi_profile_search:

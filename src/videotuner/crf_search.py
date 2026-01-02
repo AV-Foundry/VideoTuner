@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .constants import METRIC_DECIMALS
 from .pipeline_cli import DEFAULT_CRF_START_VALUE
 
 
@@ -27,7 +28,7 @@ class CRFFloorError(Exception):
         self.unmet_targets = unmet_targets
 
         target_details = ", ".join(
-            f"{name}: {current:.2f} < {target:.2f}"
+            f"{name}: {current:.{METRIC_DECIMALS}f} < {target:.{METRIC_DECIMALS}f}"
             for name, target, current in unmet_targets
         )
         super().__init__(
@@ -44,12 +45,15 @@ class QualityTarget:
     metric_name: str  # e.g., "vmaf_mean", "ssim2_5pct"
     target_value: float
     current_value: float | None = None
+    metric_decimals: int = METRIC_DECIMALS
 
     def is_met(self) -> bool:
-        """Check if target is met (current >= target)."""
+        """Check if target is met (current >= target, rounded to metric_decimals)."""
         if self.current_value is None:
             return False
-        return self.current_value >= self.target_value
+        return round(self.current_value, self.metric_decimals) >= round(
+            self.target_value, self.metric_decimals
+        )
 
     def delta(self) -> float | None:
         """Calculate how far we are from target (positive = met, negative = not met)."""
@@ -110,11 +114,13 @@ class CRFSearchState:
                 self.failing_crf = result
 
     def _check_targets_met(self, scores: dict[str, float]) -> bool:
-        """Check if all targets are met with given scores."""
+        """Check if all targets are met with given scores (rounded to metric_decimals)."""
         for target in self.targets:
             if target.metric_name not in scores:
                 return False
-            if scores[target.metric_name] < target.target_value:
+            if round(scores[target.metric_name], target.metric_decimals) < round(
+                target.target_value, target.metric_decimals
+            ):
                 return False
         return True
 
