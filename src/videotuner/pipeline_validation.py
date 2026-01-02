@@ -115,23 +115,50 @@ def build_targets(args: "PipelineArgs") -> list[QualityTarget]:
     Returns:
         List of QualityTarget objects for all specified targets
     """
+    decimals = args.metric_decimals
     targets: list[QualityTarget] = []
     if args.vmaf_target is not None:
-        targets.append(QualityTarget("vmaf_mean", args.vmaf_target))
+        targets.append(
+            QualityTarget("vmaf_mean", args.vmaf_target, metric_decimals=decimals)
+        )
     if args.vmaf_hmean_target is not None:
-        targets.append(QualityTarget("vmaf_hmean", args.vmaf_hmean_target))
+        targets.append(
+            QualityTarget(
+                "vmaf_hmean", args.vmaf_hmean_target, metric_decimals=decimals
+            )
+        )
     if args.vmaf_1pct_target is not None:
-        targets.append(QualityTarget("vmaf_1pct", args.vmaf_1pct_target))
+        targets.append(
+            QualityTarget("vmaf_1pct", args.vmaf_1pct_target, metric_decimals=decimals)
+        )
     if args.vmaf_min_target is not None:
-        targets.append(QualityTarget("vmaf_min", args.vmaf_min_target))
+        targets.append(
+            QualityTarget("vmaf_min", args.vmaf_min_target, metric_decimals=decimals)
+        )
     if args.ssim2_mean_target is not None:
-        targets.append(QualityTarget("ssim2_mean", args.ssim2_mean_target))
+        targets.append(
+            QualityTarget(
+                "ssim2_mean", args.ssim2_mean_target, metric_decimals=decimals
+            )
+        )
     if args.ssim2_median_target is not None:
-        targets.append(QualityTarget("ssim2_median", args.ssim2_median_target))
+        targets.append(
+            QualityTarget(
+                "ssim2_median", args.ssim2_median_target, metric_decimals=decimals
+            )
+        )
     if args.ssim2_95pct_target is not None:
-        targets.append(QualityTarget("ssim2_95pct", args.ssim2_95pct_target))
+        targets.append(
+            QualityTarget(
+                "ssim2_95pct", args.ssim2_95pct_target, metric_decimals=decimals
+            )
+        )
     if args.ssim2_5pct_target is not None:
-        targets.append(QualityTarget("ssim2_5pct", args.ssim2_5pct_target))
+        targets.append(
+            QualityTarget(
+                "ssim2_5pct", args.ssim2_5pct_target, metric_decimals=decimals
+            )
+        )
     return targets
 
 
@@ -139,6 +166,8 @@ def check_scores_meet_targets(
     scores: dict[str, float | None], targets: list[QualityTarget]
 ) -> bool:
     """Check if given scores meet all quality targets.
+
+    Uses each target's metric_decimals for consistent rounding.
 
     Args:
         scores: Dictionary of metric scores (may contain None values)
@@ -153,7 +182,9 @@ def check_scores_meet_targets(
         score = scores[target.metric_name]
         if score is None:
             return False
-        if score < target.target_value:
+        if round(score, target.metric_decimals) < round(
+            target.target_value, target.metric_decimals
+        ):
             return False
     return True
 

@@ -47,6 +47,7 @@ quality metrics to find the optimal rate factor for video encoding.
   - [Analysis Options](#analysis-options)
   - [Guard Bands](#guard-bands)
   - [Bitrate Warning](#bitrate-warning)
+  - [Precision](#precision)
   - [Paths](#paths)
   - [Logging](#logging)
 - [Output](#output)
@@ -561,6 +562,12 @@ Run `videotuner --help` for complete options. Key options include:
 | Option                                | Description                                                     |
 | ------------------------------------- | --------------------------------------------------------------- |
 | `--predicted-bitrate-warning-percent` | Warn if output exceeds this percentage of input bitrate (1-100) |
+
+### Precision
+
+| Option              | Default | Description                                                   |
+| ------------------- | ------- | ------------------------------------------------------------- |
+| `--metric-decimals` | `2`     | Decimal places for target comparison (display matches this) |
 
 ### Paths
 

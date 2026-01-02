@@ -6,6 +6,8 @@ import sys
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
+
+from .constants import METRIC_DECIMALS
 from .ssimulacra2_assessment import SSIM2Result
 from .vmaf_assessment import VMAFResult
 from .create_encodes import (
@@ -711,6 +713,7 @@ def run_pipeline(args: PipelineArgs) -> int:
                 targets=targets,
                 iteration=iteration,
                 targets_only=True,
+                metric_decimals=args.metric_decimals,
             )
 
             # Display search status summary
@@ -729,10 +732,12 @@ def run_pipeline(args: PipelineArgs) -> int:
             for target in targets:
                 status = "MET" if target.is_met() else "NOT MET"
                 delta_str = (
-                    f"(Δ={target.delta():.2f})" if target.delta() is not None else ""
+                    f"(Δ={target.delta():.{METRIC_DECIMALS}f})"
+                    if target.delta() is not None
+                    else ""
                 )
                 log.info(
-                    "  %s >= %.2f: %s %s",
+                    f"  %s >= %.{METRIC_DECIMALS}f: %s %s",
                     target.metric_name,
                     target.target_value,
                     status,
@@ -880,7 +885,9 @@ def run_pipeline(args: PipelineArgs) -> int:
         has_crf_profiles = any(r.optimal_crf is not None for r in ranked_results)
 
         # Display ranked comparison table
-        display_multi_profile_results(display.console, ranked_results, targets)
+        display_multi_profile_results(
+            display.console, ranked_results, targets, args.metric_decimals
+        )
 
         # Display winner (only for CRF profiles - bitrate profiles aren't comparable)
         display.console.print()
@@ -966,7 +973,11 @@ def run_pipeline(args: PipelineArgs) -> int:
 
         # targets is None in exploration mode, populated in targeting mode
         display_assessment_summary(
-            display.console, final_scores, targets=targets_for_display, iteration=None
+            display.console,
+            final_scores,
+            targets=targets_for_display,
+            iteration=None,
+            metric_decimals=args.metric_decimals,
         )
 
         # Display optimal CRF for CRF search mode

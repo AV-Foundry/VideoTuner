@@ -61,6 +61,10 @@ RESOLUTION_CONFIDENCE_THRESHOLD: float = 0.5
 # Display Constants
 # =============================================================================
 
+# Decimal places for quality metrics (VMAF, SSIMULACRA2, etc.)
+# Used for both display formatting and target comparison rounding
+METRIC_DECIMALS: int = 2
+
 # Progress bar width in characters
 PROGRESS_BAR_WIDTH: int = 40
 

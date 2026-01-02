@@ -245,12 +245,15 @@ def _run_crf_profile_search(
         crf_search_state.add_result(current_crf, search_scores)
 
         # Display iteration summary
+        # Get metric_decimals from first target (all targets share the same value)
+        metric_decimals = targets[0].metric_decimals if targets else 2
         display_assessment_summary(
             display.console,
             scores,
             targets=targets,
             iteration=iteration,
             targets_only=True,
+            metric_decimals=metric_decimals,
         )
 
         # Check convergence
