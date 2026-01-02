@@ -1,8 +1,22 @@
 """Version information and release notes for VideoTuner."""
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 RELEASE_NOTES = """
+## 0.2.2
+
+### Fixes
+
+- Correct metric rounding to match display precision, fixing false negatives where visually-passing values failed programmatically
+
+### Features
+
+- Add `--metric-decimals` CLI argument to control metric display and comparison precision (default: 2)
+
+### Build
+
+- Update bundled x265 encoder to 4.1+212+35 (Patman's Mod)
+
 ## 0.2.1
 
 ### Features
