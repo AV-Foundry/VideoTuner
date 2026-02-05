@@ -1,8 +1,18 @@
 """Version information and release notes for VideoTuner."""
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 RELEASE_NOTES = """
+## 0.2.4
+
+### Fixes
+
+- Fix Unicode 17.0.0 compatibility by updating Rich to >=14.3.2
+
+### Build
+
+- Add explicit rich._unicode_data package inclusion for Nuitka builds
+
 ## 0.2.3
 
 ### Fixes
