@@ -232,7 +232,9 @@ class CRFSearchState:
             # We're above a passing CRF - interpolate down
             interpolated = self._interpolate_from_passing(worst_target, current_crf)
             if interpolated is not None and interpolated < current_crf:
-                return self._round_to_interval(max(interpolated, CRF_FLOOR))
+                rounded = self._round_to_interval(max(interpolated, CRF_FLOOR))
+                if not self.has_been_tested(rounded):
+                    return rounded
 
         # Fallback: Make exploratory jump down
         # Scale jump with deficit size - larger gaps need bigger jumps
@@ -298,6 +300,34 @@ class CRFSearchState:
         if not targets_with_values:
             return None
         return min(targets_with_values, key=lambda item: item[1])[0]
+
+    def _has_exact_match_when_all_met(self) -> bool:
+        """Check if all targets are met AND at least one is an exact match.
+
+        When a metric exactly equals its target (at display precision), going to
+        a higher CRF will almost certainly cause it to fail. So if all targets
+        are met and one is exact, we've found the optimal CRF.
+
+        Returns:
+            True if all targets met and at least one score exactly equals its target
+        """
+        if self.passing_crf is None:
+            return False
+
+        # Verify all targets are met with the passing CRF
+        if not self._check_targets_met(self.passing_crf.scores):
+            return False
+
+        # Check if any target is an exact match
+        for target in self.targets:
+            if target.metric_name in self.passing_crf.scores:
+                score = self.passing_crf.scores[target.metric_name]
+                rounded_score = round(score, target.metric_decimals)
+                rounded_target = round(target.target_value, target.metric_decimals)
+                if rounded_score == rounded_target:
+                    return True
+
+        return False
 
     def _interpolate(self, target: QualityTarget) -> float | None:
         """Interpolate CRF between passing and failing bounds for given target."""
@@ -368,6 +398,8 @@ class CRFSearchState:
         1. We have a CRF that meets all targets (passing_crf), AND
         2. Either:
            - We're at the CRF ceiling, OR
+           - All targets are met and at least one score exactly equals its target
+             (going higher would almost certainly fail), OR
            - We've tested a higher CRF that doesn't meet targets, and the gap is too
              small to test anything in between (considering the CRF interval)
         """
@@ -376,6 +408,11 @@ class CRFSearchState:
 
         # Special case: If passing CRF is at ceiling, we've found the optimal CRF
         if abs(self.passing_crf.crf - CRF_CEILING) < 0.01:
+            return True
+
+        # Special case: All targets met with at least one exact match
+        # Going to a higher CRF would almost certainly cause the exact match to fail
+        if self._has_exact_match_when_all_met():
             return True
 
         # Check if we've tested a higher CRF that failed to meet targets

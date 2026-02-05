@@ -276,7 +276,7 @@ def _run_crf_profile_search(
             break
 
         next_crf = crf_search_state.calculate_next_crf(current_crf)
-        if next_crf is None:
+        if next_crf is None or crf_search_state.has_been_tested(next_crf):
             break
 
         # Display next step

@@ -133,6 +133,94 @@ class TestCRFSearchConvergence:
         assert state.get_optimal_scores() is None
 
 
+class TestExactMatchConvergence:
+    """Tests for exact match early termination."""
+
+    def test_convergence_with_exact_match_all_targets_met(self):
+        """Test that search converges when all targets met and one is exact."""
+        targets = [
+            QualityTarget("vmaf_mean", 99.0),
+            QualityTarget("ssim2_mean", 90.0),
+        ]
+        state = CRFSearchState(targets, crf_interval=0.5)
+
+        # CRF 14.0 meets all targets with SSIM2 exactly on target
+        state.add_result(14.0, {"vmaf_mean": 99.75, "ssim2_mean": 90.00})
+
+        # Should converge immediately - going higher would almost certainly fail
+        assert state.is_converged()
+        assert state.get_optimal_crf() == 14.0
+
+    def test_no_convergence_exact_match_but_other_target_not_met(self):
+        """Test that exact match doesn't trigger convergence if other targets aren't met."""
+        targets = [
+            QualityTarget("vmaf_mean", 99.0),
+            QualityTarget("ssim2_mean", 90.0),
+        ]
+        state = CRFSearchState(targets, crf_interval=0.5)
+
+        # SSIM2 exactly on target, but VMAF below target
+        state.add_result(16.0, {"vmaf_mean": 98.5, "ssim2_mean": 90.00})
+
+        # Should NOT converge - VMAF target not met
+        assert not state.is_converged()
+        assert state.get_optimal_crf() is None  # No passing CRF
+
+    def test_convergence_exact_match_within_rounding(self):
+        """Test that values rounding to target are treated as exact matches."""
+        targets = [QualityTarget("ssim2_mean", 90.0, metric_decimals=2)]
+        state = CRFSearchState(targets, crf_interval=0.5)
+
+        # 89.996 rounds to 90.00 at 2 decimal places
+        state.add_result(14.0, {"ssim2_mean": 89.996})
+
+        assert state.is_converged()
+        assert state.get_optimal_crf() == 14.0
+
+    def test_no_convergence_when_above_target(self):
+        """Test that being above target (not exact) doesn't trigger early convergence."""
+        targets = [QualityTarget("ssim2_mean", 90.0)]
+        state = CRFSearchState(targets, crf_interval=0.5)
+
+        # SSIM2 is above target, not exact
+        state.add_result(14.0, {"ssim2_mean": 90.50})
+
+        # Should NOT converge - we might be able to go higher
+        assert not state.is_converged()
+
+
+class TestDuplicateCRFPrevention:
+    """Tests for preventing duplicate CRF testing."""
+
+    def test_no_duplicate_crf_from_interpolation(self):
+        """Test that calculate_next_crf doesn't return already-tested values."""
+        targets = [QualityTarget("ssim2_mean", 90.0)]
+        state = CRFSearchState(targets, crf_interval=0.5)
+
+        # Simulate the scenario from the bug report
+        state.add_result(13.5, {"ssim2_mean": 90.47})  # Pass
+        state.add_result(15.5, {"ssim2_mean": 88.32})  # Fail
+        state.add_result(14.0, {"ssim2_mean": 90.00})  # Pass (exact)
+        state.add_result(15.0, {"ssim2_mean": 88.92})  # Fail
+
+        # Next CRF should NOT be 14.0 (already tested)
+        next_crf = state.calculate_next_crf(15.0)
+        assert next_crf != 14.0, "Should not return already-tested CRF 14.0"
+
+    def test_has_been_tested_check(self):
+        """Test that has_been_tested correctly identifies tested values."""
+        targets = [QualityTarget("vmaf_mean", 95.0)]
+        state = CRFSearchState(targets, crf_interval=0.5)
+
+        state.add_result(16.0, {"vmaf_mean": 96.0})
+        state.add_result(17.0, {"vmaf_mean": 94.0})
+
+        assert state.has_been_tested(16.0)
+        assert state.has_been_tested(17.0)
+        assert not state.has_been_tested(16.5)
+        assert not state.has_been_tested(15.0)
+
+
 class TestCRFSearchNextCalculation:
     """Tests for calculating the next CRF to test."""
 
