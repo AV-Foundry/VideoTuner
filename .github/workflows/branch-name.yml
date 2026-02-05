@@ -7,6 +7,7 @@ on:
 jobs:
   check-branch-name:
     runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     steps:
       - name: Check branch naming convention
         run: |
