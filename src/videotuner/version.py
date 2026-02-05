@@ -1,8 +1,15 @@
 """Version information and release notes for VideoTuner."""
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 RELEASE_NOTES = """
+## 0.2.3
+
+### Fixes
+
+- Prevent duplicate CRF testing when interpolation rounds to an already-tested value
+- Add exact match early termination when all targets are met and a score exactly equals its target
+
 ## 0.2.2
 
 ### Fixes
