@@ -343,6 +343,7 @@ def run_nuitka() -> Path:
         "--python-flag=-m",
         "--nofollow-import-to=pytest",
         "--nofollow-import-to=tests",
+        "--include-package=rich._unicode_data",  # Required for rich text rendering
         "--windows-console-mode=force",
         # Optional: Add version info to the exe
         f"--product-version={__version__}",
