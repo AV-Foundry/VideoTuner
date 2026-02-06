@@ -206,5 +206,5 @@ def _cleanup_hevc(hevc_path: Path | None) -> None:
     if hevc_path is not None and hevc_path.exists():
         try:
             hevc_path.unlink()
-        except Exception:
+        except OSError:
             pass

@@ -491,7 +491,7 @@ def run_vmaf(
                 harmonic_mean = (len(frame_scores) / denom) if denom else float("nan")
         if harmonic_mean is None:
             harmonic_mean = float("nan")
-        if pooled_minimum is None and minimum == minimum:
+        if pooled_minimum is None and not math.isnan(minimum):
             pooled_minimum = minimum
         if mean is None:
             log.warning("Could not locate VMAF metrics in %s", log_path)

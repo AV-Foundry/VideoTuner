@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -257,12 +258,10 @@ def parse_video_info(
             # Extract frame count from container metadata
             frame_count_raw = cast(int | str | None, video_track.frame_count)
             if frame_count_raw is not None:
-                try:
+                with suppress(ValueError, TypeError):
                     frame_count = int(frame_count_raw)
                     if frame_count <= 0:
                         frame_count = None
-                except (ValueError, TypeError):
-                    pass
 
             # Extract video stream bitrate (in bits per second from pymediainfo)
             # First try video track bit_rate, then fall back to overall_bit_rate

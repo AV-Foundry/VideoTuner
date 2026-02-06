@@ -157,12 +157,8 @@ class CRFSearchState:
                 # No failing CRF above us - make exploratory jump up
                 # Be aggressive - if we overshoot, binary search will refine
                 closest_target = self._find_closest_to_target()
-                if closest_target is not None:
-                    closest_delta = closest_target.delta()
-                else:
-                    closest_delta = None
-                if closest_target is not None and closest_delta is not None:
-                    delta = closest_delta
+                delta = closest_target.delta() if closest_target is not None else None
+                if delta is not None:
                     # Scale jump with headroom - larger gaps allow bigger jumps
                     if delta >= 1.0:
                         # Scale proportionally: 1 CRF per VMAF point, min 3.0, max 15.0

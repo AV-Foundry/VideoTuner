@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from types import TracebackType
 
@@ -392,10 +392,8 @@ class Stage:
             frame_num = int(match.group(1))
             total_reported = match.group(2)
             if total_reported:
-                try:
+                with suppress(ValueError):
                     self.set_total(int(total_reported))
-                except ValueError:
-                    pass
             elif total_frames:
                 self.set_total(total_frames)
 
