@@ -190,8 +190,8 @@ def run_pipeline(args: PipelineArgs) -> int:
         log_file = Path(args.log_file)
         try:
             _ = ensure_dir(log_file.parent)
-        except Exception:
-            pass
+        except OSError as e:
+            log.warning("Could not create log directory %s: %s", log_file.parent, e)
 
     def _rel(p: Path) -> str:
         try:
@@ -213,8 +213,8 @@ def run_pipeline(args: PipelineArgs) -> int:
     try:
         log.info("Log file: %s", _rel(log_file))
         log.info("Job folder: %s", _rel(workdir))
-    except Exception:
-        pass
+    except OSError as e:
+        log.warning("Failed to log file/job folder paths due to OSError: %s", e)
 
     # Log job settings
     mode_str = "CRF Search"
@@ -329,8 +329,6 @@ def run_pipeline(args: PipelineArgs) -> int:
 
     # Calculate autocrop values once (shared across ALL encodes)
     crop_values: CropValues | None = None
-    final_width = info.width or 0
-    final_height = info.height or 0
 
     if auto_crop:
         # Analyze the entire video to get representative crop values

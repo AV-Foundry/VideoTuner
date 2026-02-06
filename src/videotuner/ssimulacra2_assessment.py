@@ -4,6 +4,7 @@ import json
 import logging
 import statistics
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -192,11 +193,8 @@ except Exception as e:
         for line in output.splitlines():
             line = line.strip()
             if line.startswith("SCORE:"):
-                try:
-                    score = float(line[6:])
-                    scores.append(score)
-                except ValueError:
-                    pass
+                with suppress(ValueError):
+                    scores.append(float(line[6:]))
 
         if not scores:
             # Include captured output in error for debugging

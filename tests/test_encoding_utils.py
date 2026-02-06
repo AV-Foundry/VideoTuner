@@ -182,7 +182,7 @@ class TestCreateTempEncodePaths:
         try:
             vpy_path.unlink(missing_ok=True)
             hevc_path.unlink(missing_ok=True)
-        except Exception:
+        except OSError:  # Best-effort cleanup; ignore failures in tests
             pass
 
     def test_creates_paths_with_name_in_system_temp(self):
@@ -199,7 +199,7 @@ class TestCreateTempEncodePaths:
         try:
             vpy_path.unlink(missing_ok=True)
             hevc_path.unlink(missing_ok=True)
-        except Exception:
+        except OSError:  # Best-effort cleanup; ignore failures in tests
             pass
 
     def test_creates_paths_in_custom_temp_dir(self):
@@ -250,7 +250,7 @@ class TestCreateTempEncodePaths:
         try:
             result[0].unlink(missing_ok=True)
             result[1].unlink(missing_ok=True)
-        except Exception:
+        except OSError:  # Best-effort cleanup; ignore failures in tests
             pass
 
 
