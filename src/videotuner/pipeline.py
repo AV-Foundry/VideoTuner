@@ -190,8 +190,8 @@ def run_pipeline(args: PipelineArgs) -> int:
         log_file = Path(args.log_file)
         try:
             _ = ensure_dir(log_file.parent)
-        except OSError:
-            pass
+        except OSError as e:
+            log.warning("Could not create log directory %s: %s", log_file.parent, e)
 
     def _rel(p: Path) -> str:
         try:
@@ -213,8 +213,8 @@ def run_pipeline(args: PipelineArgs) -> int:
     try:
         log.info("Log file: %s", _rel(log_file))
         log.info("Job folder: %s", _rel(workdir))
-    except OSError:
-        pass
+    except OSError as e:
+        log.warning("Failed to log file/job folder paths due to OSError: %s", e)
 
     # Log job settings
     mode_str = "CRF Search"
