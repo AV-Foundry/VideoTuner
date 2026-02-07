@@ -14,7 +14,7 @@ from .create_encodes import (
     build_ffms2_index,
     calculate_autocrop_values,
 )
-from .encoding_utils import CropValues, VapourSynthEnv
+from .encoding_utils import CropValues, is_hdr_video
 from .pipeline_iteration import run_single_crf_iteration, run_single_bitrate_iteration
 from .pipeline_cli import (
     PipelineArgs,
@@ -157,19 +157,6 @@ def run_pipeline(args: PipelineArgs) -> int:
         )
         log.error("Reduce guard settings")
         return 1
-
-    # Check if autocrop plugin is available when autocrop is enabled
-    if auto_crop:
-        vs_env = VapourSynthEnv.from_args(args.vs_dir, args.vs_plugin_dir, repo_root)
-        if not vs_env.has_autocrop_plugin():
-            display.console.print(
-                f"[bold yellow]⚠ Warning:[/bold yellow] [yellow]autocrop.dll not found in {vs_env.vs_plugin_dir} - disabling autocrop[/yellow]"
-            )
-            display.console.print(
-                "[dim]Download from: https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop[/dim]"
-            )
-            display.console.print()
-            auto_crop = False
 
     # Default workdir is <repo_root>/jobs/<name>_<timestamp> unless overridden
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -349,6 +336,10 @@ def run_pipeline(args: PipelineArgs) -> int:
                 start_frame=0,
                 num_frames=total_frames,
                 fps=info.fps,
+                is_hdr=is_hdr_video(info.color_trc),
+                threshold=args.autocrop_threshold,
+                interval=args.autocrop_interval,
+                mod_direction=args.autocrop_mod_direction,
                 cwd=repo_root,
                 temp_dir=workdir / "temp",
                 line_handler=autocrop_stage.make_autocrop_handler(),

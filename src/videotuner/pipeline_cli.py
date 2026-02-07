@@ -74,6 +74,9 @@ class PipelineArgs:
     vs_dir: Path | None = None
     vs_plugin_dir: Path | None = None
     auto_crop: bool = True
+    autocrop_threshold: float = 10.0
+    autocrop_interval: int = 15
+    autocrop_mod_direction: str = "increase"
     predicted_bitrate_warning_percent: float | None = None
     metric_decimals: int = METRIC_DECIMALS
 
@@ -175,6 +178,28 @@ def build_arg_parser() -> argparse.ArgumentParser:
         action="store_false",
         dest="auto_crop",
         help="Disable automatic crop detection",
+    )
+    _ = encoding_group.add_argument(
+        "--autocrop-threshold",
+        type=float,
+        default=10.0,
+        dest="autocrop_threshold",
+        help="Luminance threshold for autocrop border detection as percentage (0-100, default: 10.0)",
+    )
+    _ = encoding_group.add_argument(
+        "--autocrop-interval",
+        type=int,
+        default=_get_default("autocrop_interval"),
+        dest="autocrop_interval",
+        help=f"Seconds between sampled frames for autocrop detection (default: {_get_default('autocrop_interval')})",
+    )
+    _ = encoding_group.add_argument(
+        "--autocrop-mod-direction",
+        type=str,
+        choices=["increase", "decrease"],
+        default=_get_default("autocrop_mod_direction"),
+        dest="autocrop_mod_direction",
+        help="Mod alignment direction: increase rounds up (overcrop, default), decrease rounds down (undercrop)",
     )
 
     # -------------------------------------------------------------------------

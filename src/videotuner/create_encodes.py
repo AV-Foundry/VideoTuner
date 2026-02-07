@@ -167,6 +167,10 @@ def calculate_autocrop_values(
     num_frames: int,
     fps: float,
     *,
+    is_hdr: bool = False,
+    threshold: float = 10.0,
+    interval: int = 15,
+    mod_direction: str = "increase",
     cwd: Path | None = None,
     temp_dir: Path | None = None,
     line_handler: Callable[[str], bool] | None = None,
@@ -174,16 +178,22 @@ def calculate_autocrop_values(
     """
     Calculate autocrop values from source video for consistent cropping.
 
-    This function analyzes the source video once to determine optimal crop values
-    that should be applied consistently to all encodes (reference and distorted).
+    Uses a luminance-threshold algorithm: probes 21 evenly-spaced
+    scan lines per side, scanning inward up to 25% of each dimension. Pixels
+    below the luminance threshold are considered border.
 
-    Samples one frame every 15 seconds for faster analysis while maintaining accuracy.
+    Samples one frame every `interval` seconds, skipping first/last 5% of frames.
 
     Args:
         source_path: Input source video path
         start_frame: First frame to analyze (0-indexed)
         num_frames: Number of frames to analyze
         fps: Video framerate for sampling frequency
+        is_hdr: Whether the source is HDR (PQ/HLG) — enables transfer tonemapping
+        threshold: Luminance threshold as percentage (0-100, default 10.0)
+        interval: Seconds between sampled frames (default 15)
+        mod_direction: Mod alignment direction — "increase" rounds up (overcrop),
+            "decrease" rounds down (undercrop)
         cwd: Working directory for execution
         temp_dir: Directory for temporary files (defaults to system temp)
         line_handler: Optional callback for progress parsing
@@ -234,31 +244,106 @@ def calculate_autocrop_values(
         end_frame,
     )
 
+    # Build the resize arguments for grayscale conversion
+    if is_hdr:
+        # HDR: tonemap PQ transfer to BT.709 via zimg (CPU-only) and normalize to
+        # full-range GRAY8 so the threshold applies consistently after tonemapping
+        resize_args = "clip, format=vs.GRAY8, range_s='full', transfer_in_s='st2084', transfer_s='709'"
+        threshold_y = int(threshold / 100.0 * 255)
+    else:
+        # SDR: convert to GRAY8 in native (limited) range to match reference
+        # implementation behaviour — threshold is offset to limited-range Y scale
+        resize_args = "clip, format=vs.GRAY8"
+        threshold_y = int(16 + threshold / 100.0 * 219)
+
     # Build VapourSynth script that calculates and prints crop values
     vpy_content = f"""import vapoursynth as vs
 import sys
+import ctypes
 
 core = vs.core
+
+NUM_PROBES = 21
+MAX_SCAN_DIV = 4  # scan up to 1/4 of dimension
+THRESHOLD = {threshold_y}
+
+def _ptr_to_int(raw):
+    if isinstance(raw, int):
+        return raw
+    if hasattr(raw, 'value') and isinstance(raw.value, int):
+        return raw.value
+    return int.from_bytes(bytes(raw), byteorder=sys.byteorder)
+
+def get_pixel(ptr, stride, x, y):
+    return ctypes.c_uint8.from_address(ptr + y * stride + x).value
+
+def detect_crop(frame, width, height):
+    ptr = _ptr_to_int(frame.get_read_ptr(0))
+    stride = frame.get_stride(0)
+    max_v = height // MAX_SCAN_DIV
+    max_h = width // MAX_SCAN_DIV
+
+    # Evenly-spaced probe positions (21 probes per axis)
+    x_probes = [width * (i + 1) // (NUM_PROBES + 1) for i in range(NUM_PROBES)]
+    y_probes = [height * (i + 1) // (NUM_PROBES + 1) for i in range(NUM_PROBES)]
+
+    # Top: for each x-probe, scan downward from top edge
+    top_vals = []
+    for x in x_probes:
+        crop = 0
+        for y in range(max_v):
+            if get_pixel(ptr, stride, x, y) < THRESHOLD:
+                crop = y + 1
+            else:
+                break
+        top_vals.append(crop)
+
+    # Bottom: for each x-probe, scan upward from bottom edge
+    bottom_vals = []
+    for x in x_probes:
+        crop = 0
+        for y in range(height - 1, height - 1 - max_v, -1):
+            if get_pixel(ptr, stride, x, y) < THRESHOLD:
+                crop = height - y
+            else:
+                break
+        bottom_vals.append(crop)
+
+    # Left: for each y-probe, scan rightward from left edge
+    left_vals = []
+    for y in y_probes:
+        crop = 0
+        for x in range(max_h):
+            if get_pixel(ptr, stride, x, y) < THRESHOLD:
+                crop = x + 1
+            else:
+                break
+        left_vals.append(crop)
+
+    # Right: for each y-probe, scan leftward from right edge
+    right_vals = []
+    for y in y_probes:
+        crop = 0
+        for x in range(width - 1, width - 1 - max_h, -1):
+            if get_pixel(ptr, stride, x, y) < THRESHOLD:
+                crop = width - x
+            else:
+                break
+        right_vals.append(crop)
+
+    return min(left_vals), min(right_vals), min(top_vals), min(bottom_vals)
 
 try:
     # Load source and trim to frame range
     clip = core.ffms2.Source(r"{abs_source_path}", cachefile=r"{abs_cache_file}")
     clip = clip[{start_frame}:{end_frame}]
 
-    # Check if acrop plugin is available
-    if not hasattr(core, 'acrop'):
-        print("ERROR: acrop plugin not loaded", file=sys.stderr)
-        sys.exit(1)
+    # Skip first/last 5% of frames to avoid intros/outros with different framing
+    skip = max(1, int(clip.num_frames * 0.05))
+    clip = clip[skip:clip.num_frames - skip]
 
-    # Add crop value properties to frames using CropValues
-    range_top = clip.height // 2
-    range_bottom = clip.height // 2
-    range_left = clip.width // 2
-    range_right = clip.width // 2
-
-    clip_with_props = core.acrop.CropValues(
-        clip, top=range_top, bottom=range_bottom, left=range_left, right=range_right
-    )
+    # Convert to 8-bit full-range grayscale for luminance analysis
+    gray = core.resize.Point({resize_args})
 
     # Analyze sampled frames to detect varying letterboxing/pillarboxing
     min_left = None
@@ -266,27 +351,32 @@ try:
     min_top = None
     min_bottom = None
 
-    # Sample one frame every 15 seconds for accurate crop detection
-    step = max(1, round({fps} * 15))
+    # Sample one frame every {interval} seconds for accurate crop detection
+    step = max(1, round({fps} * {interval}))
 
     # Calculate total samples for progress reporting
-    total_samples = len(range(0, clip.num_frames, step))
+    total_samples = len(range(0, gray.num_frames, step))
 
-    print(f"[AutoCrop] Analyzing {{clip.width}}x{{clip.height}} clip, {{clip.num_frames}} frames (sampling every {{step}} frames, {{total_samples}} samples)", file=sys.stderr)
+    print(f"[AutoCrop] Analyzing {{gray.width}}x{{gray.height}} clip, {{gray.num_frames}} frames (sampling every {{step}} frames, {{total_samples}} samples, threshold={threshold_y})", file=sys.stderr)
 
-    # Sample frames and read crop values from frame properties
-    for sample_idx, i in enumerate(range(0, clip.num_frames, step)):
+    # Sample frames and detect crop via luminance-threshold scanning
+    for sample_idx, i in enumerate(range(0, gray.num_frames, step)):
         # Report progress to stderr for line_handler to parse
         progress_pct = int((sample_idx + 1) * 100 / total_samples)
         print(f"AutoCrop progress: {{sample_idx + 1}}/{{total_samples}} ({{progress_pct}}%)", file=sys.stderr)
 
-        frame = clip_with_props.get_frame(i)
+        frame = gray.get_frame(i)
+        left, right, top, bottom = detect_crop(frame, gray.width, gray.height)
 
-        # Read crop values from frame properties
-        left = frame.props.get('CropLeftValue', 0)
-        right = frame.props.get('CropRightValue', 0)
-        top = frame.props.get('CropTopValue', 0)
-        bottom = frame.props.get('CropBottomValue', 0)
+        # Early exit: if any frame has zero crop on all sides, the global
+        # minimum will be zero regardless — no need to keep sampling
+        if left == 0 and right == 0 and top == 0 and bottom == 0:
+            min_left = 0
+            min_right = 0
+            min_top = 0
+            min_bottom = 0
+            print(f"[AutoCrop] Frame {{i}} has no borders, stopping early", file=sys.stderr)
+            break
 
         # Initialize or update minimum values (minimum = safest, least aggressive crop)
         if min_left is None:
@@ -299,6 +389,19 @@ try:
             min_right = min(min_right, right)
             min_top = min(min_top, top)
             min_bottom = min(min_bottom, bottom)
+
+    # Mod-2 alignment
+    direction = "{mod_direction}"  # "increase" = overcrop, "decrease" = undercrop
+    if direction == "increase":
+        min_left += min_left % 2
+        min_right += min_right % 2
+        min_top += min_top % 2
+        min_bottom += min_bottom % 2
+    else:
+        min_left -= min_left % 2
+        min_right -= min_right % 2
+        min_top -= min_top % 2
+        min_bottom -= min_bottom % 2
 
     # Print final crop values to stdout for parsing
     print(f"CROP_VALUES:{{min_left}},{{min_right}},{{min_top}},{{min_bottom}}")

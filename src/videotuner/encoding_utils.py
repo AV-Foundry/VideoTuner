@@ -300,19 +300,6 @@ class VapourSynthEnv:
 
         return env
 
-    @property
-    def autocrop_dll(self) -> Path:
-        """Path to the autocrop plugin DLL."""
-        return self.vs_plugin_dir / "autocrop.dll"
-
-    def has_autocrop_plugin(self) -> bool:
-        """Check if the autocrop plugin is available.
-
-        Returns:
-            True if autocrop.dll exists in the plugin directory.
-        """
-        return self.autocrop_dll.exists()
-
 
 @dataclass(frozen=True)
 class EncoderPaths:
