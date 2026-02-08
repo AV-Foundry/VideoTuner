@@ -4,7 +4,6 @@ import logging
 import shlex
 import subprocess
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -35,37 +34,6 @@ from .tool_parsers import CROPDETECT_RE
 from .utils import ensure_dir, log_separator, run_capture
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class CropConfig:
-    """Configuration for cropdetect behavior.
-
-    Groups the enable flag with optional pre-calculated crop values.
-    This ensures these related parameters are always passed together.
-
-    Attributes:
-        enabled: Whether cropdetect is enabled
-        values: Pre-calculated crop values (only used if enabled is True)
-    """
-
-    enabled: bool = False
-    values: CropValues | None = None
-
-    @classmethod
-    def disabled(cls) -> "CropConfig":
-        """Create a disabled crop configuration."""
-        return cls(enabled=False, values=None)
-
-    @classmethod
-    def with_values(cls, values: CropValues) -> "CropConfig":
-        """Create an enabled crop configuration with specific values."""
-        return cls(enabled=True, values=values)
-
-    @classmethod
-    def auto(cls) -> "CropConfig":
-        """Create an enabled crop configuration that will auto-detect values."""
-        return cls(enabled=True, values=None)
 
 
 def mux_hevc_to_mkv(

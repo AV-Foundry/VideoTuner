@@ -371,7 +371,7 @@ def run_pipeline(args: PipelineArgs) -> int:
             final_height,
         )
         log.info("CropDetect will be applied to ALL encoding operations")
-    elif not crop_detect:
+    else:
         log.info(
             "CropDetect disabled - analyzing full frame including any letterboxing"
         )
