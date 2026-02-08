@@ -340,8 +340,10 @@ def run_pipeline(args: PipelineArgs) -> int:
                 threshold=args.autocrop_threshold,
                 interval=args.autocrop_interval,
                 mod_direction=args.autocrop_mod_direction,
+                ffmpeg_bin=args.ffmpeg_bin,
+                source_width=info.width or 0,
+                source_height=info.height or 0,
                 cwd=repo_root,
-                temp_dir=workdir / "temp",
                 line_handler=autocrop_stage.make_autocrop_handler(),
             )
             # Calculate final dimensions after crop

@@ -711,5 +711,4 @@ The pipeline is organized into modules:
 ## Credits
 
 - Inspired by [ab-av1](https://github.com/alexheretic/ab-av1) by alexheretic
-- Autocrop algorithm derived from [StaxRip](https://github.com/staxrip/staxrip) (MIT License, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md))
-- This project was developed with the assistance of [Claude Code](https://claude.ai/code), Anthropic's AI-powered development tool
+- This project was developed with the assistance of [Claude Code](https://claude.com/product/claude-code), Anthropic's AI-powered development tool

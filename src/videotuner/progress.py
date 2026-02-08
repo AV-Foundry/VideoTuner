@@ -20,7 +20,6 @@ from rich.progress import (
 
 from .constants import PROGRESS_BAR_WIDTH
 from .tool_parsers import (
-    AUTOCROP_PROGRESS_RE,
     FFMPEG_FRAME_RE,
     FFMSINDEX_PROGRESS_RE,
     MKVMERGE_PCT_RE,
@@ -339,24 +338,19 @@ class Stage:
     def make_autocrop_handler(self) -> LineHandler:
         """Create a handler for autocrop progress output.
 
-        Autocrop outputs progress in the format:
-            "AutoCrop progress: 5/10 (50%)"
+        Autocrop uses FFmpeg cropdetect, so we parse ``frame=N`` lines
+        from FFmpeg's stderr to track progress.
         """
 
         def handler(line: str) -> bool:
             line = clean_ansi(line)
-            match = AUTOCROP_PROGRESS_RE.search(line)
+            if "frame=" not in line:
+                return False
+            match = FFMPEG_FRAME_RE.search(line)
             if not match:
                 return False
-
-            current = int(match.group(1))
-            total = int(match.group(2))
-
-            # Set total on first match
-            if self.total is None or self.total == 1:
-                self.set_total(total)
-
-            self.update(completed=current)
+            frame = int(match.group(1))
+            self.update(completed=frame)
             return True
 
         return handler

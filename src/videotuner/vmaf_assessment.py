@@ -17,6 +17,7 @@ from .media import (
     get_bit_depth_from_pix_fmt,
     get_assessment_frame_count,
 )
+from .tonemapping import has_vulkan_support, build_tonemap_chain
 from .tool_parsers import get_float
 from .utils import run, make_relative_path
 from .constants import (
@@ -309,6 +310,7 @@ def build_vmaf_filter(
     width: int = 3840,
     height: int = 2160,
     tonemap_policy: str = "auto",  # auto|force|off
+    use_gpu: bool = True,
 ) -> str:
     apply_tonemap = False
     if tonemap_policy == "force":
@@ -323,14 +325,9 @@ def build_vmaf_filter(
     final = f"format={pix_fmt},setpts=PTS-STARTPTS,settb=AVTB"
 
     if apply_tonemap:
-        lp_sdr = (
-            "libplacebo="
-            f"w={width}:h={height}:"
-            "colorspace=bt709:color_primaries=bt709:color_trc=bt709:range=limited:"
-            "tonemapping=bt.2390"
-        )
-        ref_chain = f"[0:v]{lp_sdr},{final}[ref]"
-        dis_chain = f"[1:v]{lp_sdr},{final}[dis]"
+        tonemap = build_tonemap_chain(width, height, use_gpu=use_gpu)
+        ref_chain = f"[0:v]{tonemap},{final}[ref]"
+        dis_chain = f"[1:v]{tonemap},{final}[dis]"
     else:
         pre = f"scale={width}:{height}:flags=bicubic"
         ref_chain = f"[0:v]{pre},{final}[ref]"
@@ -392,6 +389,7 @@ def run_vmaf(
     target_width = dis_info.width or 3840
     target_height = dis_info.height or 2160
 
+    use_gpu = has_vulkan_support(ffmpeg_bin)
     filter_prefix = build_vmaf_filter(
         ref_needs_tonemap=needs_tonemap(ref_info),
         _dis_needs_tonemap=needs_tonemap(dis_info),
@@ -399,6 +397,7 @@ def run_vmaf(
         width=target_width,
         height=target_height,
         tonemap_policy=tonemap_policy,
+        use_gpu=use_gpu,
     )
     # Use a relative path for log_path within the filter graph (avoid drive letters)
     log_path_escaped = _escape_filter_path(Path(make_relative_path(log_path, cwd)))
