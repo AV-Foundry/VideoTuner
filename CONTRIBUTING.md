@@ -53,7 +53,6 @@ This project adheres to the [Contributor Covenant 3.0 Code of Conduct](CODE_OF_C
    - **ffms2** 5.0: Download `ffms2-5.0-msvc.7z` from [ffms2 releases](https://github.com/FFMS/ffms2/releases/tag/5.0), extract `x64/ffms2.dll` and `x64/ffmsindex.exe`
    - **LSMASHSource** 1266.0.0.0: Download `L-SMASH-Works-r1266.0.0.0.7z` from [L-SMASH-Works releases](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works/releases/tag/1266.0.0.0), extract `x64/LSMASHSource.dll`
    - **vszip** R11: Download `vapoursynth-zip-r11-windows-x86_64.zip` from [vapoursynth-zip releases](https://github.com/dnjulek/vapoursynth-zip/releases/tag/R11), extract `vszip.dll`
-   - **autocrop**: Download from [vapoursynth-autocrop](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop), extract `autocrop.dll`
 
 5. **Download x265 encoder:**
 

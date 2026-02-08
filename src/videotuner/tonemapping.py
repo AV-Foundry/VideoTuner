@@ -1,7 +1,7 @@
 """Unified tonemapping helpers for HDR→SDR conversion.
 
 Provides GPU detection and FFmpeg filter chain construction for tonemapping.
-Used by both VMAF assessment and autocrop to ensure consistent HDR handling.
+Used by both VMAF assessment and cropdetect to ensure consistent HDR handling.
 
 GPU path uses libplacebo with bt.2390 (Vulkan required).
 CPU path uses zscale + tonemap with hable (no GPU required).

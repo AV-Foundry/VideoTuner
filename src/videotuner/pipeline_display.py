@@ -27,7 +27,7 @@ class PipelineArgsProtocol(Protocol):
     multi_profile_search: list[str] | None
     profile: str | None
     preset: str | None
-    auto_crop: bool
+    crop_detect: bool
     vmaf: bool
     ssim2: bool
     vmaf_interval_frames: int
@@ -137,7 +137,7 @@ def display_settings_summary(
         assessments.append("SSIMULACRA2")
     console.print(f"  Assessments: {', '.join(assessments)}")
 
-    console.print(f"  AutoCrop: {'Enabled' if args.auto_crop else 'Disabled'}")
+    console.print(f"  CropDetect: {'Enabled' if args.crop_detect else 'Disabled'}")
 
     # Log non-default sampling parameters
     if args.vmaf_interval_frames != get_default("vmaf_interval_frames"):

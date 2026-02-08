@@ -335,10 +335,10 @@ class Stage:
 
         return handler
 
-    def make_autocrop_handler(self) -> LineHandler:
-        """Create a handler for autocrop progress output.
+    def make_cropdetect_handler(self) -> LineHandler:
+        """Create a handler for cropdetect progress output.
 
-        Autocrop uses FFmpeg cropdetect, so we parse ``frame=N`` lines
+        CropDetect uses FFmpeg cropdetect, so we parse ``frame=N`` lines
         from FFmpeg's stderr to track progress.
         """
 

@@ -493,7 +493,7 @@ def build_sampling_vpy_script(
         f"sampled = sampled.std.AssumeFPS(fpsnum={fps_num}, fpsden=1000)",
     ]
 
-    # Apply autocrop if provided
+    # Apply crop if provided
     if crop_values is not None:
         if (
             crop_values.left > 0
@@ -502,7 +502,7 @@ def build_sampling_vpy_script(
             or crop_values.bottom > 0
         ):
             vpy_lines.append("")
-            vpy_lines.append("# Apply autocrop to sampled frames")
+            vpy_lines.append("# Apply crop to sampled frames")
             crop_line = (
                 f"sampled = core.std.Crop(sampled, left={crop_values.left}, "
                 f"right={crop_values.right}, top={crop_values.top}, bottom={crop_values.bottom})"

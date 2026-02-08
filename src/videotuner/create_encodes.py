@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import shlex
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,13 +39,13 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class CropConfig:
-    """Configuration for autocrop behavior.
+    """Configuration for cropdetect behavior.
 
-    Groups the enable_autocrop flag with optional pre-calculated crop values.
+    Groups the enable flag with optional pre-calculated crop values.
     This ensures these related parameters are always passed together.
 
     Attributes:
-        enabled: Whether autocrop is enabled
+        enabled: Whether cropdetect is enabled
         values: Pre-calculated crop values (only used if enabled is True)
     """
 
@@ -161,34 +162,32 @@ def build_ffms2_index(
         return False
 
 
-def mod2(value: int, direction: str) -> int:
-    """Round a value to the nearest even number in the given direction."""
-    if value % 2 == 0:
-        return value
-    return value + 1 if direction == "increase" else value - 1
-
-
-def calculate_autocrop_values(
+def calculate_cropdetect_values(
     source_path: Path,
     start_frame: int,
     num_frames: int,
     fps: float,
     *,
     is_hdr: bool = False,
-    threshold: float = 10.0,
-    interval: int = 15,
-    mod_direction: str = "increase",
+    interval: int = 80,
     ffmpeg_bin: str = "ffmpeg",
     source_width: int,
     source_height: int,
     cwd: Path | None = None,
     line_handler: Callable[[str], bool] | None = None,
+    cropdetect_mode: str = "black",
+    cropdetect_limit: int | None = None,
+    cropdetect_round: int = 2,
+    cropdetect_mv_threshold: int | None = None,
+    cropdetect_low: float | None = None,
+    cropdetect_high: float | None = None,
 ) -> CropValues:
-    """Calculate autocrop values from source video using FFmpeg cropdetect.
+    """Calculate crop values using FFmpeg cropdetect with timestamp seeking.
 
-    Samples one frame every ``interval`` seconds, skipping the first and last
-    10% of the video.  For HDR content, a tonemapping filter is inserted before
-    cropdetect (GPU libplacebo if available, CPU hable otherwise).
+    Seeks to individual sample points across the middle 80% of the video
+    instead of decoding every frame, making it much faster for long videos.
+    For HDR content, a tonemapping filter is inserted before cropdetect
+    (GPU libplacebo if available, CPU hable otherwise).
 
     Args:
         source_path: Input source video path.
@@ -196,21 +195,24 @@ def calculate_autocrop_values(
         num_frames: Total number of frames in the video.
         fps: Video framerate for sampling frequency.
         is_hdr: Whether the source is HDR (PQ/HLG).
-        threshold: Luminance threshold as percentage (0-100, default 10.0).
-        interval: Seconds between sampled frames (default 15).
-        mod_direction: ``"increase"`` rounds up (overcrop),
-            ``"decrease"`` rounds down (undercrop).
+        interval: Seconds between sampled frames.
         ffmpeg_bin: Path to the ffmpeg binary.
         source_width: Width of the source video in pixels.
         source_height: Height of the source video in pixels.
         cwd: Working directory for execution.
         line_handler: Optional callback for progress parsing.
+        cropdetect_mode: Detection mode (``"black"`` or ``"mvedges"``).
+        cropdetect_limit: Black pixel threshold 0-255 (None = FFmpeg default 24).
+        cropdetect_round: Crop dimension divisibility (default 2).
+        cropdetect_mv_threshold: Motion threshold in pixels (None = FFmpeg default 8).
+        cropdetect_low: Canny low threshold 0.0-1.0 (None = FFmpeg default).
+        cropdetect_high: Canny high threshold 0.0-1.0 (None = FFmpeg default).
 
     Returns:
         CropValues with left, right, top, bottom crop values.
 
     Raises:
-        RuntimeError: If autocrop detection fails.
+        RuntimeError: If ffmpeg binary is not found.
     """
     log = logging.getLogger(__name__)
 
@@ -220,62 +222,103 @@ def calculate_autocrop_values(
     safe_end = start_frame + num_frames - skip
     step = max(1, round(fps * interval))
 
-    # FFmpeg select expression: sample one frame every `step` within the safe range
-    select_expr = (
-        f"between(n\\,{safe_start}\\,{safe_end})*not(mod(n-{safe_start}\\,{step}))"
-    )
+    # Generate sample frame positions and convert to timestamps
+    sample_frames = list(range(safe_start, safe_end, step))
+    if not sample_frames:
+        log.warning("No sample frames to analyse — returning zero crop")
+        return CropValues(left=0, right=0, top=0, bottom=0)
 
-    # Threshold conversion: VideoTuner 0-100 % → cropdetect limit (0.0-1.0)
-    limit = (16 + threshold / 100.0 * 219) / 255
-
-    # Build filter chain
-    filters: list[str] = [f"select='{select_expr}'"]
+    # Build filter chain (no select filter — one frame per seek)
+    filters: list[str] = []
     if is_hdr:
         use_gpu = has_vulkan_support(ffmpeg_bin)
         filters.append(
             build_tonemap_chain(source_width, source_height, use_gpu=use_gpu)
         )
-    filters.append(f"cropdetect=limit={limit:.6f}:round=2:reset=1")
+    # Normalise to 8-bit YUV so cropdetect's limit (default 24/255) is
+    # interpreted consistently regardless of source bit depth.
+    filters.append("format=yuv420p")
+    # Build cropdetect filter with user-configurable parameters.
+    # skip=0: evaluate immediately (default skip=2 discards frames, which
+    # produces no output when we only pass a single frame per seek).
+    # reset=1: detect per-frame independently.
+    cd_parts = [f"round={cropdetect_round}", "reset=1", "skip=0"]
+    if cropdetect_mode != "black":
+        cd_parts.append(f"mode={cropdetect_mode}")
+    if cropdetect_limit is not None:
+        cd_parts.append(f"limit={cropdetect_limit}")
+    if cropdetect_mv_threshold is not None:
+        cd_parts.append(f"mv_threshold={cropdetect_mv_threshold}")
+    if cropdetect_low is not None:
+        cd_parts.append(f"low={cropdetect_low}")
+    if cropdetect_high is not None:
+        cd_parts.append(f"high={cropdetect_high}")
+    filters.append(f"cropdetect={':'.join(cd_parts)}")
+    vf = ",".join(filters)
 
     abs_source = resolve_absolute_path(source_path, cwd)
-    cmd = [
-        ffmpeg_bin,
-        "-hide_banner",
-        "-i",
-        str(abs_source),
-        "-vf",
-        ",".join(filters),
-        "-an",
-        "-sn",
-        "-dn",
-        "-f",
-        "null",
-        "-",
-    ]
 
-    log.debug("AutoCrop command: %s", " ".join(shlex.quote(c) for c in cmd))
-
-    output = run_capture(cmd, cwd=cwd, line_callback=line_handler)
-
-    # Parse all crop=W:H:X:Y values from FFmpeg output
-    matches = cast(list[tuple[str, str, str, str]], CROPDETECT_RE.findall(output))
-    if not matches:
-        log.warning("cropdetect produced no output — returning zero crop")
-        return CropValues(left=0, right=0, top=0, bottom=0)
-
-    # Convert crop=W:H:X:Y → (left, right, top, bottom) per frame and take
-    # the minimum of each side across all frames (safest/least aggressive crop)
     min_left = source_width
     min_right = source_width
     min_top = source_height
     min_bottom = source_height
+    any_detected = False
 
-    for w_s, h_s, x_s, y_s in matches:
-        w, h, x, y = int(w_s), int(h_s), int(x_s), int(y_s)
-        min_left = min(min_left, x)
-        min_top = min(min_top, y)
-        min_right = min(min_right, source_width - w - x)
-        min_bottom = min(min_bottom, source_height - h - y)
+    for i, frame_num in enumerate(sample_frames):
+        timestamp = frame_num / fps
+        cmd = [
+            ffmpeg_bin,
+            "-hide_banner",
+            "-ss",
+            f"{timestamp:.3f}",
+            "-i",
+            str(abs_source),
+            "-frames:v",
+            "1",
+            "-vf",
+            vf,
+            "-an",
+            "-sn",
+            "-dn",
+            "-f",
+            "null",
+            "-",
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=60,
+                cwd=str(cwd) if cwd else None,
+            )
+        except subprocess.TimeoutExpired:
+            log.debug("cropdetect timed out at %.3fs, skipping sample", timestamp)
+            if line_handler:
+                _ = line_handler(f"frame= {i + 1}")
+            continue
+        except FileNotFoundError as e:
+            raise RuntimeError(f"Command not found: {ffmpeg_bin}") from e
+
+        output = result.stderr + "\n" + result.stdout
+        matches = cast(list[tuple[str, str, str, str]], CROPDETECT_RE.findall(output))
+        for w_s, h_s, x_s, y_s in matches:
+            w, h, x, y = int(w_s), int(h_s), int(x_s), int(y_s)
+            min_left = min(min_left, x)
+            min_top = min(min_top, y)
+            min_right = min(min_right, source_width - w - x)
+            min_bottom = min(min_bottom, source_height - h - y)
+            any_detected = True
+
+        if line_handler:
+            _ = line_handler(f"frame= {i + 1}")
+
+    if not any_detected:
+        log.warning("cropdetect produced no output — returning zero crop")
+        return CropValues(left=0, right=0, top=0, bottom=0)
 
     # Clamp negatives (can happen if cropdetect returns a larger area than source)
     left_val = max(0, min_left)
@@ -283,14 +326,8 @@ def calculate_autocrop_values(
     top_val = max(0, min_top)
     bottom_val = max(0, min_bottom)
 
-    # Mod-2 alignment
-    left_val = mod2(left_val, mod_direction)
-    right_val = mod2(right_val, mod_direction)
-    top_val = mod2(top_val, mod_direction)
-    bottom_val = mod2(bottom_val, mod_direction)
-
     log.debug(
-        "AutoCrop values calculated: L=%d R=%d T=%d B=%d",
+        "CropDetect values calculated: L=%d R=%d T=%d B=%d",
         left_val,
         right_val,
         top_val,
@@ -317,7 +354,7 @@ def encode_x265_concatenated_reference(
     line_handler: Callable[[str], bool] | None = None,
     mux_handler: Callable[[str], bool] | None = None,
     perform_mux: bool = True,
-    enable_autocrop: bool = False,
+    enable_cropdetect: bool = False,
     crop_values: CropValues | None = None,
     metric_label: str | None = None,
 ) -> Path:
@@ -343,7 +380,7 @@ def encode_x265_concatenated_reference(
         temp_dir: Directory for temporary files
         line_handler: Optional callback for x265 progress
         mux_handler: Optional callback for mkvmerge progress
-        enable_autocrop: Whether to apply autocrop
+        enable_cropdetect: Whether to apply cropdetect
         crop_values: Pre-calculated crop values
         metric_label: Optional label for log messages (e.g., "VMAF", "SSIM2")
 
@@ -388,7 +425,7 @@ def encode_x265_concatenated_reference(
 
     # Build and write VapourSynth script
     cache_file = source_path.parent / f"{source_path.stem}.ffindex"
-    effective_crop = crop_values if enable_autocrop else None
+    effective_crop = crop_values if enable_cropdetect else None
     vpy_content = build_sampling_vpy_script(
         source_path=source_path,
         cache_file=cache_file,
@@ -473,7 +510,7 @@ def encode_x265_concatenated_distorted(
     line_handler: Callable[[str], bool] | None = None,
     mux_handler: Callable[[str], bool] | None = None,
     perform_mux: bool = True,
-    enable_autocrop: bool = False,
+    enable_cropdetect: bool = False,
     crop_values: CropValues | None = None,
     metric_label: str | None = None,
 ) -> Path:
@@ -500,7 +537,7 @@ def encode_x265_concatenated_distorted(
         temp_dir: Directory for temporary files
         line_handler: Optional callback for x265 progress
         mux_handler: Optional callback for mkvmerge progress
-        enable_autocrop: Whether to apply autocrop
+        enable_cropdetect: Whether to apply cropdetect
         crop_values: Pre-calculated crop values
         metric_label: Optional label for log messages (e.g., "VMAF", "SSIM2")
 
@@ -545,7 +582,7 @@ def encode_x265_concatenated_distorted(
 
     # Build and write VapourSynth script
     cache_file = source_path.parent / f"{source_path.stem}.ffindex"
-    effective_crop = crop_values if enable_autocrop else None
+    effective_crop = crop_values if enable_cropdetect else None
     vpy_content = build_sampling_vpy_script(
         source_path=source_path,
         cache_file=cache_file,
@@ -632,7 +669,7 @@ def encode_x265_concatenated_bitrate(
     line_handler: Callable[[str], bool] | None = None,
     mux_handler: Callable[[str], bool] | None = None,
     perform_mux: bool = True,
-    enable_autocrop: bool = False,
+    enable_cropdetect: bool = False,
     crop_values: CropValues | None = None,
     metric_label: str | None = None,
 ) -> Path:
@@ -661,7 +698,7 @@ def encode_x265_concatenated_bitrate(
         line_handler: Optional callback for x265 progress
         mux_handler: Optional callback for mkvmerge progress
         perform_mux: Whether to mux HEVC to MKV
-        enable_autocrop: Whether to apply autocrop
+        enable_cropdetect: Whether to apply cropdetect
         crop_values: Pre-calculated crop values
         metric_label: Optional label for log messages (e.g., "VMAF", "SSIM2")
 
@@ -740,7 +777,7 @@ def encode_x265_concatenated_bitrate(
 
     # Build and write VapourSynth script
     cache_file = source_path.parent / f"{source_path.stem}.ffindex"
-    effective_crop = crop_values if enable_autocrop else None
+    effective_crop = crop_values if enable_cropdetect else None
     vpy_content = build_sampling_vpy_script(
         source_path=source_path,
         cache_file=cache_file,
@@ -887,7 +924,7 @@ def encode_x265_multipass_bitrate(
     stats_file: Path,
     line_handler: Callable[[str], bool] | None = None,
     mux_handler: Callable[[str], bool] | None = None,
-    enable_autocrop: bool = False,
+    enable_cropdetect: bool = False,
     crop_values: CropValues | None = None,
 ) -> Path:
     """
@@ -919,7 +956,7 @@ def encode_x265_multipass_bitrate(
         stats_file: Path for stats file (shared across all passes)
         line_handler: Optional callback for x265 progress
         mux_handler: Optional callback for mkvmerge progress
-        enable_autocrop: Whether to apply autocrop
+        enable_cropdetect: Whether to apply cropdetect
         crop_values: Pre-calculated crop values
 
     Returns:
@@ -970,7 +1007,7 @@ def encode_x265_multipass_bitrate(
         line_handler=line_handler,
         mux_handler=None,  # Don't mux pass 1 output
         perform_mux=False,
-        enable_autocrop=enable_autocrop,
+        enable_cropdetect=enable_cropdetect,
         crop_values=crop_values,
     )
 
@@ -1012,7 +1049,7 @@ def encode_x265_multipass_bitrate(
             line_handler=line_handler,
             mux_handler=None,  # Don't mux pass 3 output
             perform_mux=False,
-            enable_autocrop=enable_autocrop,
+            enable_cropdetect=enable_cropdetect,
             crop_values=crop_values,
         )
 
@@ -1050,7 +1087,7 @@ def encode_x265_multipass_bitrate(
         line_handler=line_handler,
         mux_handler=mux_handler,
         perform_mux=True,
-        enable_autocrop=enable_autocrop,
+        enable_cropdetect=enable_cropdetect,
         crop_values=crop_values,
     )
 

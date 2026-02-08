@@ -2,22 +2,34 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 from typing import cast
 from unittest.mock import patch
 
 import pytest
 
-from videotuner.create_encodes import CropConfig, mod2, calculate_autocrop_values
+from videotuner.create_encodes import CropConfig, calculate_cropdetect_values
 from videotuner.encoding_utils import CropValues
 from videotuner.tool_parsers import CROPDETECT_RE
 
 _TEST_PATH = Path("test.mkv")
 
+# Number of samples for num_frames=10000, fps=24.0, interval=80 (defaults):
+# skip=1000, safe_start=1000, safe_end=9000, step=1920 → 5 samples
+_SAMPLES_10K = len(range(1000, 9000, 1920))
+
 
 def _passthrough_resolve(p: Path, _c: Path | None) -> Path:
     """Typed side_effect for resolve_absolute_path mock."""
     return p
+
+
+def _crop_result(crop_line: str) -> subprocess.CompletedProcess[str]:
+    """Create a CompletedProcess with cropdetect output on stderr."""
+    return subprocess.CompletedProcess(
+        args=[], returncode=0, stdout="", stderr=crop_line
+    )
 
 
 class TestCropValues:
@@ -91,30 +103,6 @@ class TestCropConfig:
         assert config.values is crop
 
 
-class TestMod2:
-    """Tests for mod2 helper."""
-
-    def test_even_value_unchanged(self) -> None:
-        assert mod2(10, "increase") == 10
-        assert mod2(10, "decrease") == 10
-
-    def test_odd_increase(self) -> None:
-        assert mod2(11, "increase") == 12
-
-    def test_odd_decrease(self) -> None:
-        assert mod2(11, "decrease") == 10
-
-    def test_zero(self) -> None:
-        assert mod2(0, "increase") == 0
-        assert mod2(0, "decrease") == 0
-
-    def test_one_increase(self) -> None:
-        assert mod2(1, "increase") == 2
-
-    def test_one_decrease(self) -> None:
-        assert mod2(1, "decrease") == 0
-
-
 class TestCropdetectParsing:
     """Tests for CROPDETECT_RE regex."""
 
@@ -136,28 +124,22 @@ class TestCropdetectParsing:
         assert len(matches) == 0
 
 
-class TestCalculateAutocropValues:
-    """Tests for calculate_autocrop_values with mocked FFmpeg."""
-
-    def _mock_cropdetect_output(self, *crop_lines: str) -> str:
-        """Build mock FFmpeg output from crop=W:H:X:Y lines."""
-        return "\n".join(crop_lines)
+class TestCalculateCropdetectValues:
+    """Tests for calculate_cropdetect_values with mocked FFmpeg."""
 
     def test_basic_letterbox(self) -> None:
         """Test detection of consistent letterboxing (278px bars)."""
-        output = self._mock_cropdetect_output(
-            "crop=3840:1584:0:278",
-            "crop=3840:1584:0:278",
-            "crop=3840:1584:0:278",
-        )
         with (
-            patch("videotuner.create_encodes.run_capture", return_value=output),
+            patch(
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("crop=3840:1584:0:278"),
+            ),
             patch(
                 "videotuner.create_encodes.resolve_absolute_path",
                 side_effect=_passthrough_resolve,
             ),
         ):
-            result = calculate_autocrop_values(
+            result = calculate_cropdetect_values(
                 source_path=_TEST_PATH,
                 start_frame=0,
                 num_frames=10000,
@@ -172,19 +154,20 @@ class TestCalculateAutocropValues:
 
     def test_minimum_across_frames(self) -> None:
         """Test that the minimum crop is taken across all frames."""
-        output = self._mock_cropdetect_output(
-            "crop=3840:1584:0:278",
-            "crop=3840:2160:0:0",  # Full frame — no crop
-            "crop=3840:1584:0:278",
-        )
+        # Most samples return letterbox, one returns full frame (no crop)
+        results = [_crop_result("crop=3840:1584:0:278")] * _SAMPLES_10K
+        results[2] = _crop_result("crop=3840:2160:0:0")
         with (
-            patch("videotuner.create_encodes.run_capture", return_value=output),
+            patch(
+                "videotuner.create_encodes.subprocess.run",
+                side_effect=results,
+            ),
             patch(
                 "videotuner.create_encodes.resolve_absolute_path",
                 side_effect=_passthrough_resolve,
             ),
         ):
-            result = calculate_autocrop_values(
+            result = calculate_cropdetect_values(
                 source_path=_TEST_PATH,
                 start_frame=0,
                 num_frames=10000,
@@ -200,14 +183,15 @@ class TestCalculateAutocropValues:
         """Test graceful handling when cropdetect produces no output."""
         with (
             patch(
-                "videotuner.create_encodes.run_capture", return_value="no crop lines"
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("no crop lines here"),
             ),
             patch(
                 "videotuner.create_encodes.resolve_absolute_path",
                 side_effect=_passthrough_resolve,
             ),
         ):
-            result = calculate_autocrop_values(
+            result = calculate_cropdetect_values(
                 source_path=_TEST_PATH,
                 start_frame=0,
                 num_frames=10000,
@@ -217,62 +201,12 @@ class TestCalculateAutocropValues:
             )
         assert result == CropValues(left=0, right=0, top=0, bottom=0)
 
-    def test_mod2_increase(self) -> None:
-        """Test mod-2 alignment with increase direction."""
-        output = self._mock_cropdetect_output("crop=3838:1583:1:279")
-        with (
-            patch("videotuner.create_encodes.run_capture", return_value=output),
-            patch(
-                "videotuner.create_encodes.resolve_absolute_path",
-                side_effect=_passthrough_resolve,
-            ),
-        ):
-            result = calculate_autocrop_values(
-                source_path=_TEST_PATH,
-                start_frame=0,
-                num_frames=10000,
-                fps=24.0,
-                mod_direction="increase",
-                source_width=3840,
-                source_height=2160,
-            )
-        # left=1→2, top=279→280, right=3840-3838-1=1→2, bottom=2160-1583-279=298→298
-        assert result.left == 2
-        assert result.top == 280
-        assert result.right == 2
-        assert result.bottom == 298
-
-    def test_mod2_decrease(self) -> None:
-        """Test mod-2 alignment with decrease direction."""
-        output = self._mock_cropdetect_output("crop=3838:1583:1:279")
-        with (
-            patch("videotuner.create_encodes.run_capture", return_value=output),
-            patch(
-                "videotuner.create_encodes.resolve_absolute_path",
-                side_effect=_passthrough_resolve,
-            ),
-        ):
-            result = calculate_autocrop_values(
-                source_path=_TEST_PATH,
-                start_frame=0,
-                num_frames=10000,
-                fps=24.0,
-                mod_direction="decrease",
-                source_width=3840,
-                source_height=2160,
-            )
-        # left=1→0, top=279→278, right=1→0, bottom=298→298
-        assert result.left == 0
-        assert result.top == 278
-        assert result.right == 0
-        assert result.bottom == 298
-
     def test_hdr_inserts_tonemap(self) -> None:
         """Test that HDR mode inserts tonemapping in the filter chain."""
-        output = self._mock_cropdetect_output("crop=3840:2160:0:0")
         with (
             patch(
-                "videotuner.create_encodes.run_capture", return_value=output
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("crop=3840:2160:0:0"),
             ) as mock_run,
             patch(
                 "videotuner.create_encodes.resolve_absolute_path",
@@ -280,7 +214,7 @@ class TestCalculateAutocropValues:
             ),
             patch("videotuner.create_encodes.has_vulkan_support", return_value=True),
         ):
-            _ = calculate_autocrop_values(
+            _ = calculate_cropdetect_values(
                 source_path=_TEST_PATH,
                 start_frame=0,
                 num_frames=10000,
@@ -289,36 +223,186 @@ class TestCalculateAutocropValues:
                 source_width=3840,
                 source_height=2160,
             )
-        # Check that the -vf filter contains libplacebo
-        cmd = cast(list[str], mock_run.call_args[0][0])
+        # Check the first sample's -vf filter contains libplacebo
+        first_call = mock_run.call_args_list[0]
+        cmd = cast(list[str], first_call[0][0])
         vf_idx = cmd.index("-vf")
         vf_arg = cmd[vf_idx + 1]
         assert "libplacebo=" in vf_arg
         assert "cropdetect=" in vf_arg
 
-    def test_threshold_conversion(self) -> None:
-        """Test threshold is converted to cropdetect limit format."""
-        output = self._mock_cropdetect_output("crop=3840:2160:0:0")
+    def test_format_conversion_before_cropdetect(self) -> None:
+        """Test that format=yuv420p is inserted before cropdetect."""
         with (
             patch(
-                "videotuner.create_encodes.run_capture", return_value=output
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("crop=3840:2160:0:0"),
             ) as mock_run,
             patch(
                 "videotuner.create_encodes.resolve_absolute_path",
                 side_effect=_passthrough_resolve,
             ),
         ):
-            _ = calculate_autocrop_values(
+            _ = calculate_cropdetect_values(
                 source_path=_TEST_PATH,
                 start_frame=0,
                 num_frames=10000,
                 fps=24.0,
-                threshold=10.0,
                 source_width=3840,
                 source_height=2160,
             )
-        cmd = cast(list[str], mock_run.call_args[0][0])
+        first_call = mock_run.call_args_list[0]
+        cmd = cast(list[str], first_call[0][0])
         vf_idx = cmd.index("-vf")
         vf_arg = cmd[vf_idx + 1]
-        # limit = (16 + 10/100 * 219) / 255 ≈ 0.148627
-        assert "cropdetect=limit=0.14" in vf_arg
+        # format=yuv420p must appear before cropdetect
+        assert "format=yuv420p" in vf_arg
+        assert vf_arg.index("format=yuv420p") < vf_arg.index("cropdetect=")
+        # Uses FFmpeg default limit (24), no custom limit parameter
+        assert "limit=" not in vf_arg
+        # skip=0 ensures cropdetect evaluates the very first frame
+        assert "skip=0" in vf_arg
+
+    def test_uses_ss_seeking(self) -> None:
+        """Test that per-sample seeking uses -ss before -i."""
+        with (
+            patch(
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("crop=3840:2160:0:0"),
+            ) as mock_run,
+            patch(
+                "videotuner.create_encodes.resolve_absolute_path",
+                side_effect=_passthrough_resolve,
+            ),
+        ):
+            _ = calculate_cropdetect_values(
+                source_path=_TEST_PATH,
+                start_frame=0,
+                num_frames=10000,
+                fps=24.0,
+                source_width=3840,
+                source_height=2160,
+            )
+        # Should make one subprocess call per sample
+        assert mock_run.call_count == _SAMPLES_10K
+        # Check first call uses -ss before -i
+        first_call = mock_run.call_args_list[0]
+        cmd = cast(list[str], first_call[0][0])
+        ss_idx = cmd.index("-ss")
+        i_idx = cmd.index("-i")
+        assert ss_idx < i_idx
+        assert "-frames:v" in cmd
+
+    def test_custom_limit(self) -> None:
+        """Test that a custom limit is included in the filter string."""
+        with (
+            patch(
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("crop=3840:2160:0:0"),
+            ) as mock_run,
+            patch(
+                "videotuner.create_encodes.resolve_absolute_path",
+                side_effect=_passthrough_resolve,
+            ),
+        ):
+            _ = calculate_cropdetect_values(
+                source_path=_TEST_PATH,
+                start_frame=0,
+                num_frames=10000,
+                fps=24.0,
+                source_width=3840,
+                source_height=2160,
+                cropdetect_limit=30,
+            )
+        first_call = mock_run.call_args_list[0]
+        cmd = cast(list[str], first_call[0][0])
+        vf_idx = cmd.index("-vf")
+        vf_arg = cmd[vf_idx + 1]
+        assert "limit=30" in vf_arg
+
+    def test_custom_round(self) -> None:
+        """Test that a custom round value is included in the filter string."""
+        with (
+            patch(
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("crop=3840:2160:0:0"),
+            ) as mock_run,
+            patch(
+                "videotuner.create_encodes.resolve_absolute_path",
+                side_effect=_passthrough_resolve,
+            ),
+        ):
+            _ = calculate_cropdetect_values(
+                source_path=_TEST_PATH,
+                start_frame=0,
+                num_frames=10000,
+                fps=24.0,
+                source_width=3840,
+                source_height=2160,
+                cropdetect_round=16,
+            )
+        first_call = mock_run.call_args_list[0]
+        cmd = cast(list[str], first_call[0][0])
+        vf_idx = cmd.index("-vf")
+        vf_arg = cmd[vf_idx + 1]
+        assert "round=16" in vf_arg
+
+    def test_mvedges_mode(self) -> None:
+        """Test that mvedges mode and its params are included in the filter string."""
+        with (
+            patch(
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("crop=3840:2160:0:0"),
+            ) as mock_run,
+            patch(
+                "videotuner.create_encodes.resolve_absolute_path",
+                side_effect=_passthrough_resolve,
+            ),
+        ):
+            _ = calculate_cropdetect_values(
+                source_path=_TEST_PATH,
+                start_frame=0,
+                num_frames=10000,
+                fps=24.0,
+                source_width=3840,
+                source_height=2160,
+                cropdetect_mode="mvedges",
+                cropdetect_mv_threshold=10,
+                cropdetect_low=0.05,
+                cropdetect_high=0.10,
+            )
+        first_call = mock_run.call_args_list[0]
+        cmd = cast(list[str], first_call[0][0])
+        vf_idx = cmd.index("-vf")
+        vf_arg = cmd[vf_idx + 1]
+        assert "mode=mvedges" in vf_arg
+        assert "mv_threshold=10" in vf_arg
+        assert "low=0.05" in vf_arg
+        assert "high=0.1" in vf_arg
+
+    def test_default_mode_not_in_filter(self) -> None:
+        """Test that default black mode is not explicitly in the filter string."""
+        with (
+            patch(
+                "videotuner.create_encodes.subprocess.run",
+                return_value=_crop_result("crop=3840:2160:0:0"),
+            ) as mock_run,
+            patch(
+                "videotuner.create_encodes.resolve_absolute_path",
+                side_effect=_passthrough_resolve,
+            ),
+        ):
+            _ = calculate_cropdetect_values(
+                source_path=_TEST_PATH,
+                start_frame=0,
+                num_frames=10000,
+                fps=24.0,
+                source_width=3840,
+                source_height=2160,
+            )
+        first_call = mock_run.call_args_list[0]
+        cmd = cast(list[str], first_call[0][0])
+        vf_idx = cmd.index("-vf")
+        vf_arg = cmd[vf_idx + 1]
+        # Default mode (black) should not be explicitly passed
+        assert "mode=" not in vf_arg

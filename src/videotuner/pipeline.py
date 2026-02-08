@@ -12,7 +12,7 @@ from .ssimulacra2_assessment import SSIM2Result
 from .vmaf_assessment import VMAFResult
 from .create_encodes import (
     build_ffms2_index,
-    calculate_autocrop_values,
+    calculate_cropdetect_values,
 )
 from .encoding_utils import CropValues, is_hdr_video
 from .pipeline_iteration import run_single_crf_iteration, run_single_bitrate_iteration
@@ -72,7 +72,7 @@ def run_pipeline(args: PipelineArgs) -> int:
     multi_profile_display = validation.multi_profile_display
     has_quality_targets = validation.has_quality_targets
 
-    auto_crop: bool = bool(args.auto_crop)
+    crop_detect: bool = bool(args.crop_detect)
 
     display = PipelineDisplay(show_title=True)
 
@@ -227,7 +227,7 @@ def run_pipeline(args: PipelineArgs) -> int:
         assessments.append("SSIMULACRA2")
     log.info("  Assessments: %s", ", ".join(assessments))
 
-    log.info("  AutoCrop: %s", "Enabled" if auto_crop else "Disabled")
+    log.info("  CropDetect: %s", "Enabled" if crop_detect else "Disabled")
 
     # Log non-default sampling parameters
     if args.vmaf_interval_frames != get_default("vmaf_interval_frames"):
@@ -285,10 +285,10 @@ def run_pipeline(args: PipelineArgs) -> int:
     log.info("")
     log.info("Source: %s", input_path.name)
 
-    # Build FFMS2 index for source (shared across autocrop and all encodes)
-    # This is done BEFORE autocrop to avoid delays during autocrop detection
+    # Build FFMS2 index for source (shared across cropdetect and all encodes)
+    # This is done BEFORE cropdetect to avoid delays during crop detection
     # Index is stored alongside the source file for persistence across job runs
-    if auto_crop or args.vmaf or args.ssim2:
+    if crop_detect or args.vmaf or args.ssim2:
         # Store index alongside source file (e.g., sources/video.mkv -> sources/video.ffindex)
         cache_file = input_path.parent / f"{input_path.stem}.ffindex"
 
@@ -314,46 +314,55 @@ def run_pipeline(args: PipelineArgs) -> int:
 
     log_section(log, "Analysis")
 
-    # Calculate autocrop values once (shared across ALL encodes)
+    # Calculate cropdetect values once (shared across ALL encodes)
     crop_values: CropValues | None = None
 
-    if auto_crop:
+    if crop_detect:
         # Analyze the entire video to get representative crop values
         total_frames = get_frame_count(input_path, info)
+        # Calculate expected sample count for progress bar
+        _skip = max(1, int(total_frames * 0.10))
+        _step = max(1, round(info.fps * args.cropdetect_interval))
+        expected_samples = len(range(_skip, total_frames - _skip, _step))
         log.info(
-            "Calculating shared autocrop values from entire video (%d frames)...",
+            "Detecting crop from entire video (%d frames, %d samples)...",
             total_frames,
+            expected_samples,
         )
         with display.stage(
-            "Calculating AutoCrop Values",
-            total=1,  # Will be updated by handler when total samples is known
+            "Detecting Crop",
+            total=expected_samples,
             show_eta=True,
             transient=True,
             show_done=True,
-        ) as autocrop_stage:
-            crop_values = calculate_autocrop_values(
+        ) as cropdetect_stage:
+            crop_values = calculate_cropdetect_values(
                 source_path=input_path,
                 start_frame=0,
                 num_frames=total_frames,
                 fps=info.fps,
                 is_hdr=is_hdr_video(info.color_trc),
-                threshold=args.autocrop_threshold,
-                interval=args.autocrop_interval,
-                mod_direction=args.autocrop_mod_direction,
+                interval=args.cropdetect_interval,
                 ffmpeg_bin=args.ffmpeg_bin,
                 source_width=info.width or 0,
                 source_height=info.height or 0,
                 cwd=repo_root,
-                line_handler=autocrop_stage.make_autocrop_handler(),
+                line_handler=cropdetect_stage.make_cropdetect_handler(),
+                cropdetect_mode=args.cropdetect_mode,
+                cropdetect_limit=args.cropdetect_limit,
+                cropdetect_round=args.cropdetect_round,
+                cropdetect_mv_threshold=args.cropdetect_mv_threshold,
+                cropdetect_low=args.cropdetect_low,
+                cropdetect_high=args.cropdetect_high,
             )
             # Calculate final dimensions after crop
             final_width = (info.width or 0) - crop_values.left - crop_values.right
             final_height = (info.height or 0) - crop_values.top - crop_values.bottom
-            autocrop_stage.done_suffix = (
+            cropdetect_stage.done_suffix = (
                 f"[white]({final_width}x{final_height})[/white]"
             )
         log.info(
-            "Autocrop values calculated: left=%d, top=%d, right=%d, bottom=%d (final: %dx%d)",
+            "CropDetect values: left=%d, top=%d, right=%d, bottom=%d (final: %dx%d)",
             crop_values.left,
             crop_values.top,
             crop_values.right,
@@ -361,9 +370,11 @@ def run_pipeline(args: PipelineArgs) -> int:
             final_width,
             final_height,
         )
-        log.info("Autocrop will be applied to ALL encoding operations")
-    elif not auto_crop:
-        log.info("Autocrop disabled - analyzing full frame including any letterboxing")
+        log.info("CropDetect will be applied to ALL encoding operations")
+    elif not crop_detect:
+        log.info(
+            "CropDetect disabled - analyzing full frame including any letterboxing"
+        )
 
     # ===================================================================
     # PERIODIC SAMPLING APPROACH
@@ -461,7 +472,7 @@ def run_pipeline(args: PipelineArgs) -> int:
             temp_dir=temp_dir,
             display=display,
             log=log,
-            auto_crop=auto_crop,
+            crop_detect=crop_detect,
             crop_values=crop_values,
         )
         if shared_ref_path is None:
@@ -494,7 +505,7 @@ def run_pipeline(args: PipelineArgs) -> int:
                 temp_dir=temp_dir,
                 display=display,
                 log=log,
-                auto_crop=auto_crop,
+                crop_detect=crop_detect,
                 crop_values=crop_values,
             )
             if vmaf_ref_path is None:
@@ -521,7 +532,7 @@ def run_pipeline(args: PipelineArgs) -> int:
                 temp_dir=temp_dir,
                 display=display,
                 log=log,
-                auto_crop=auto_crop,
+                crop_detect=crop_detect,
                 crop_values=crop_values,
             )
             if ssim2_ref_path is None:

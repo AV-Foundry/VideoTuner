@@ -332,7 +332,7 @@ def _encode_crf_metric(
                 line_handler=enc_handler,
                 mux_handler=None,
                 perform_mux=False,
-                enable_autocrop=ctx.args.auto_crop,
+                enable_cropdetect=ctx.args.crop_detect,
                 crop_values=ctx.crop_values,
                 metric_label=metric_label,
             )
@@ -832,7 +832,7 @@ def _encode_bitrate_metric(
                 line_handler=enc_handler,
                 mux_handler=None,
                 perform_mux=False,
-                enable_autocrop=ctx.args.auto_crop,
+                enable_cropdetect=ctx.args.crop_detect,
                 crop_values=ctx.crop_values,
                 metric_label=metric_label,
             )
@@ -884,7 +884,7 @@ def _encode_bitrate_metric(
                     line_handler=enc_handler,
                     mux_handler=None,
                     perform_mux=False,
-                    enable_autocrop=ctx.args.auto_crop,
+                    enable_cropdetect=ctx.args.crop_detect,
                     crop_values=ctx.crop_values,
                     metric_label=metric_label,
                 )
@@ -931,7 +931,7 @@ def _encode_bitrate_metric(
                 stats_file=stats_file,
                 analysis_file=analysis_file,
                 line_handler=enc_handler,
-                enable_autocrop=ctx.args.auto_crop,
+                enable_cropdetect=ctx.args.crop_detect,
                 crop_values=ctx.crop_values,
                 metric_label=metric_label,
             )
@@ -965,7 +965,7 @@ def _encode_bitrate_metric(
                 stats_file=None,
                 analysis_file=None,
                 line_handler=enc_handler,
-                enable_autocrop=ctx.args.auto_crop,
+                enable_cropdetect=ctx.args.crop_detect,
                 crop_values=ctx.crop_values,
                 metric_label=metric_label,
             )
