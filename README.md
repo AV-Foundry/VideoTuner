@@ -115,7 +115,9 @@ The CRF search uses interpolated binary search to efficiently find the optimal C
 
 **Detection method:**
 
-- Uses VapourSynth's `acrop` plugin to analyze each sampled frame
+- Uses a luminance-threshold algorithm with 21 evenly-spaced probe lines per edge
+- Scans inward from each edge, detecting where pixel luminance exceeds a configurable threshold (default: 10%)
+- HDR sources are automatically tonemapped to SDR for consistent threshold behavior
 - Detects letterboxing (black bars top/bottom) and pillarboxing (black bars left/right)
 - Reports final dimensions in the console: `Calculating AutoCrop Values Done! (3840x1608)`
 
@@ -170,8 +172,7 @@ Download the latest release from the [Releases page](https://github.com/AV-Found
 
 1. Download `VideoTuner-vX.X.X.zip`
 2. Extract to your preferred location
-3. Download the `autocrop` plugin (see below) and place `autocrop.dll` in `vapoursynth-portable/vs-plugins/`
-4. Run `VideoTuner.exe` from the command line
+3. Run `VideoTuner.exe` from the command line
 
 **Bundled dependencies (no separate installation required):**
 
@@ -182,12 +183,6 @@ Download the latest release from the [Releases page](https://github.com/AV-Found
 | [ffms2](https://github.com/FFMS/ffms2)                                       | 5.0        | Frame-accurate video indexing (`ffms2.dll`, `ffmsindex.exe`) |
 | [LSMASHSource](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works) | 1266.0.0.0 | Video loading for SSIMULACRA2                                |
 | [vszip](https://github.com/dnjulek/vapoursynth-zip)                          | R11        | SSIMULACRA2 quality metric calculation                       |
-
-**User-provided (not bundled due to licensing):**
-
-| Component                                                                        | Description                                                      |
-| -------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| [autocrop](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop) | Automatic letterbox/pillarbox detection. Download `autocrop.dll` |
 
 ### From Source
 
@@ -232,7 +227,6 @@ Download the following plugins and place them in `vapoursynth-portable/vs-plugin
 | ffms2        | 5.0        | [ffms2-5.0-msvc.7z](https://github.com/FFMS/ffms2/releases/tag/5.0)                                                  | `x64/ffms2.dll`, `x64/ffmsindex.exe` |
 | LSMASHSource | 1266.0.0.0 | [L-SMASH-Works-r1266.0.0.0.7z](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works/releases/tag/1266.0.0.0) | `x64/LSMASHSource.dll`               |
 | vszip        | R11        | [vapoursynth-zip-r11-windows-x86_64.zip](https://github.com/dnjulek/vapoursynth-zip/releases/tag/R11)                | `vszip.dll`                          |
-| autocrop     | -          | [vapoursynth-autocrop](https://github.com/Irrational-Encoding-Wizardry/vapoursynth-autocrop)                         | `autocrop.dll`                       |
 
 #### 4. Install x265 Encoder
 
@@ -503,13 +497,16 @@ Run `videotuner --help` for complete options. Key options include:
 
 ### Encoding Options
 
-| Option                  | Default | Description                                       |
-| ----------------------- | ------- | ------------------------------------------------- |
-| `--preset PRESET`       | `slow`  | x265 preset (mutually exclusive with `--profile`) |
-| `--profile NAME`        | -       | Profile name from `x265_profiles.yaml`            |
-| `--crf-start-value CRF` | `28`    | Starting CRF for search                           |
-| `--crf-interval STEP`   | `0.5`   | Minimum CRF step size                             |
-| `--no-autocrop`         | -       | Disable automatic crop detection                  |
+| Option                       | Default    | Description                                       |
+| ---------------------------- | ---------- | ------------------------------------------------- |
+| `--preset PRESET`            | `slow`     | x265 preset (mutually exclusive with `--profile`) |
+| `--profile NAME`             | -          | Profile name from `x265_profiles.yaml`            |
+| `--crf-start-value CRF`      | `28`       | Starting CRF for search                           |
+| `--crf-interval STEP`        | `0.5`      | Minimum CRF step size                             |
+| `--no-autocrop`              | -          | Disable automatic crop detection                  |
+| `--autocrop-threshold`       | `10.0`     | Luminance threshold for border detection (0-100)  |
+| `--autocrop-interval`        | `15`       | Seconds between sampled frames for crop detection |
+| `--autocrop-mod-direction`   | `increase` | Mod alignment: increase (overcrop) or decrease    |
 
 ### Target Options
 
@@ -714,4 +711,5 @@ The pipeline is organized into modules:
 ## Credits
 
 - Inspired by [ab-av1](https://github.com/alexheretic/ab-av1) by alexheretic
+- Autocrop algorithm derived from [StaxRip](https://github.com/staxrip/staxrip) (MIT License, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md))
 - This project was developed with the assistance of [Claude Code](https://claude.ai/code), Anthropic's AI-powered development tool
