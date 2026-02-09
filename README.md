@@ -42,6 +42,7 @@ quality metrics to find the optimal rate factor for video encoding.
 - [CLI Reference](#cli-reference)
   - [Mode Selection](#mode-selection)
   - [Encoding Options](#encoding-options)
+  - [CropDetect Options](#cropdetect-options)
   - [Target Options](#target-options)
   - [Sampling Parameters](#sampling-parameters)
   - [Analysis Options](#analysis-options)
@@ -104,22 +105,22 @@ The CRF search uses interpolated binary search to efficiently find the optimal C
 
 ### Automatic Crop Detection
 
-**Enabled by default** - automatically detects and removes letterboxing/pillarboxing (black bars) from your encodes. Disable with `--no-autocrop` if needed.
+**Enabled by default** - automatically detects and removes letterboxing/pillarboxing (black bars) from your encodes. Disable with `--no-cropdetect` if needed.
 
 **How it works:**
 
 1. **Early Pipeline Stage**: Runs immediately after building the FFMS2 index, before any encoding
-2. **Smart sampling**: Samples one frame every 15 seconds for accurate crop detection
+2. **Smart sampling**: Samples one frame every 30 seconds across the middle 80% of the video
 3. **Conservative cropping**: Uses the minimum (safest) crop values across all sampled frames to avoid accidentally cropping content
 4. **Consistent application**: The same crop values are applied to ALL encodes - reference clips, distorted clips, and across all phases
 
 **Detection method:**
 
-- Uses a luminance-threshold algorithm with 21 evenly-spaced probe lines per edge
-- Scans inward from each edge, detecting where pixel luminance exceeds a configurable threshold (default: 10%)
-- HDR sources are automatically tonemapped to SDR for consistent threshold behavior
+- Uses FFmpeg's `cropdetect` filter with per-sample timestamp seeking for fast detection
+- Supports two modes: `black` (default, pixel threshold) and `mvedges` (motion + edge detection)
+- HDR sources are automatically tonemapped to SDR before cropdetect for consistent behavior
 - Detects letterboxing (black bars top/bottom) and pillarboxing (black bars left/right)
-- Reports final dimensions in the console: `Calculating AutoCrop Values Done! (3840x1608)`
+- Reports final dimensions in the console: `Detecting Crop Done! (3840x1608)`
 
 **Benefits:**
 
@@ -497,16 +498,25 @@ Run `videotuner --help` for complete options. Key options include:
 
 ### Encoding Options
 
-| Option                       | Default    | Description                                       |
-| ---------------------------- | ---------- | ------------------------------------------------- |
-| `--preset PRESET`            | `slow`     | x265 preset (mutually exclusive with `--profile`) |
-| `--profile NAME`             | -          | Profile name from `x265_profiles.yaml`            |
-| `--crf-start-value CRF`      | `28`       | Starting CRF for search                           |
-| `--crf-interval STEP`        | `0.5`      | Minimum CRF step size                             |
-| `--no-autocrop`              | -          | Disable automatic crop detection                  |
-| `--autocrop-threshold`       | `10.0`     | Luminance threshold for border detection (0-100)  |
-| `--autocrop-interval`        | `15`       | Seconds between sampled frames for crop detection |
-| `--autocrop-mod-direction`   | `increase` | Mod alignment: increase (overcrop) or decrease    |
+| Option                  | Default | Description                                       |
+| ----------------------- | ------- | ------------------------------------------------- |
+| `--preset PRESET`       | `slow`  | x265 preset (mutually exclusive with `--profile`) |
+| `--profile NAME`        | -       | Profile name from `x265_profiles.yaml`            |
+| `--crf-start-value CRF` | `28`    | Starting CRF for search                           |
+| `--crf-interval STEP`   | `0.5`   | Minimum CRF step size                             |
+
+### CropDetect Options
+
+| Option                      | Default      | Description                                       |
+| --------------------------- | ------------ | ------------------------------------------------- |
+| `--no-cropdetect`           | -            | Disable automatic crop detection                  |
+| `--cropdetect-interval`     | `30`         | Seconds between sampled frames for crop detection |
+| `--cropdetect-mode`         | `black`      | Detection mode: `black` or `mvedges`              |
+| `--cropdetect-limit`        | FFmpeg 24    | Black pixel threshold 0-255                       |
+| `--cropdetect-round`        | `2`          | Crop dimension divisibility (FFmpeg default: 16)  |
+| `--cropdetect-mv-threshold` | FFmpeg 8     | Motion vector threshold in pixels                 |
+| `--cropdetect-low`          | FFmpeg ~0.02 | Canny low threshold 0.0-1.0                       |
+| `--cropdetect-high`         | FFmpeg ~0.06 | Canny high threshold 0.0-1.0                      |
 
 ### Target Options
 
@@ -562,8 +572,8 @@ Run `videotuner --help` for complete options. Key options include:
 
 ### Precision
 
-| Option              | Default | Description                                                   |
-| ------------------- | ------- | ------------------------------------------------------------- |
+| Option              | Default | Description                                                 |
+| ------------------- | ------- | ----------------------------------------------------------- |
 | `--metric-decimals` | `2`     | Decimal places for target comparison (display matches this) |
 
 ### Paths
@@ -696,7 +706,7 @@ The pipeline is organized into modules:
 
 ### Utilities
 
-- `media.py` - Media probing, metadata extraction, and autocrop detection via FFprobe/VapourSynth
+- `media.py` - Media probing and metadata extraction via FFprobe/VapourSynth
 - `utils.py` - Shared utility functions (subprocess execution, float formatting, file operations)
 - `progress.py` - Rich console output, progress bars, and subprocess line handlers
 - `constants.py` - Centralized constants (CRF limits, thread counts, display settings, tolerances)
@@ -711,5 +721,4 @@ The pipeline is organized into modules:
 ## Credits
 
 - Inspired by [ab-av1](https://github.com/alexheretic/ab-av1) by alexheretic
-- Autocrop algorithm derived from [StaxRip](https://github.com/staxrip/staxrip) (MIT License, see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md))
-- This project was developed with the assistance of [Claude Code](https://claude.ai/code), Anthropic's AI-powered development tool
+- This project was developed with the assistance of [Claude Code](https://claude.com/product/claude-code), Anthropic's AI-powered development tool

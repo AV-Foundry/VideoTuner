@@ -54,19 +54,11 @@ VSZIP_PROGRESS_RE = re.compile(r"vszip progress:\s*(\d+)\s*/\s*(\d+)", re.IGNORE
 # ffmsindex progress: "Indexing, please wait... 50%"
 FFMSINDEX_PROGRESS_RE = re.compile(r"(\d+)%", re.IGNORECASE)
 
-# AutoCrop progress: "AutoCrop progress: 5/10"
-AUTOCROP_PROGRESS_RE = re.compile(r"AutoCrop progress: (\d+)/(\d+)", re.IGNORECASE)
+# FFmpeg cropdetect output: "crop=W:H:X:Y"
+CROPDETECT_RE = re.compile(r"crop=(\d+):(\d+):(\d+):(\d+)")
 
 # ANSI escape sequences for terminal colors/formatting
 ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-
-
-# =============================================================================
-# VapourSynth Output Patterns
-# =============================================================================
-
-# Crop values output: "CROP_VALUES:left,right,top,bottom"
-CROP_VALUES_RE = re.compile(r"CROP_VALUES:(\d+),(\d+),(\d+),(\d+)")
 
 
 # =============================================================================
@@ -160,28 +152,6 @@ def parse_fraction(rate: str) -> float:
         return float(rate)
     except ValueError:
         return 0.0
-
-
-def parse_crop_values(output: str) -> tuple[int, int, int, int] | None:
-    """Parse VapourSynth CROP_VALUES output.
-
-    Looks for a line like "CROP_VALUES:left,right,top,bottom" in the output.
-
-    Args:
-        output: Full output text from VapourSynth script
-
-    Returns:
-        Tuple of (left, right, top, bottom) crop values, or None if not found
-    """
-    match = CROP_VALUES_RE.search(output)
-    if not match:
-        return None
-    return (
-        int(match.group(1)),
-        int(match.group(2)),
-        int(match.group(3)),
-        int(match.group(4)),
-    )
 
 
 def clean_ansi(line: str) -> str:

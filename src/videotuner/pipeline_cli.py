@@ -73,10 +73,14 @@ class PipelineArgs:
     ssim2_log: Path | None = None
     vs_dir: Path | None = None
     vs_plugin_dir: Path | None = None
-    auto_crop: bool = True
-    autocrop_threshold: float = 10.0
-    autocrop_interval: int = 15
-    autocrop_mod_direction: str = "increase"
+    crop_detect: bool = True
+    cropdetect_interval: int = 30
+    cropdetect_mode: str = "black"
+    cropdetect_limit: int | None = None
+    cropdetect_round: int = 2
+    cropdetect_mv_threshold: int | None = None
+    cropdetect_low: float | None = None
+    cropdetect_high: float | None = None
     predicted_bitrate_warning_percent: float | None = None
     metric_decimals: int = METRIC_DECIMALS
 
@@ -173,33 +177,66 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default=_get_default("crf_interval"),
         help=f"Minimum CRF step size (default: {_get_default('crf_interval')})",
     )
-    _ = encoding_group.add_argument(
-        "--no-autocrop",
+
+    # -------------------------------------------------------------------------
+    # CropDetect Options
+    # -------------------------------------------------------------------------
+    cropdetect_group = p.add_argument_group("CropDetect Options")
+    _ = cropdetect_group.add_argument(
+        "--no-cropdetect",
         action="store_false",
-        dest="auto_crop",
+        dest="crop_detect",
         help="Disable automatic crop detection",
     )
-    _ = encoding_group.add_argument(
-        "--autocrop-threshold",
-        type=float,
-        default=10.0,
-        dest="autocrop_threshold",
-        help="Luminance threshold for autocrop border detection as percentage (0-100, default: 10.0)",
-    )
-    _ = encoding_group.add_argument(
-        "--autocrop-interval",
+    _ = cropdetect_group.add_argument(
+        "--cropdetect-interval",
         type=int,
-        default=_get_default("autocrop_interval"),
-        dest="autocrop_interval",
-        help=f"Seconds between sampled frames for autocrop detection (default: {_get_default('autocrop_interval')})",
+        default=_get_default("cropdetect_interval"),
+        dest="cropdetect_interval",
+        help=f"Seconds between sampled frames for crop detection (default: {_get_default('cropdetect_interval')})",
     )
-    _ = encoding_group.add_argument(
-        "--autocrop-mod-direction",
+    _ = cropdetect_group.add_argument(
+        "--cropdetect-mode",
         type=str,
-        choices=["increase", "decrease"],
-        default=_get_default("autocrop_mod_direction"),
-        dest="autocrop_mod_direction",
-        help="Mod alignment direction: increase rounds up (overcrop, default), decrease rounds down (undercrop)",
+        choices=["black", "mvedges"],
+        default=_get_default("cropdetect_mode"),
+        dest="cropdetect_mode",
+        help="Detection mode: black (pixel threshold) or mvedges (motion + edges)",
+    )
+    _ = cropdetect_group.add_argument(
+        "--cropdetect-limit",
+        type=int,
+        default=_get_default("cropdetect_limit"),
+        dest="cropdetect_limit",
+        help="Black pixel threshold 0-255 (default: FFmpeg's 24)",
+    )
+    _ = cropdetect_group.add_argument(
+        "--cropdetect-round",
+        type=int,
+        default=_get_default("cropdetect_round"),
+        dest="cropdetect_round",
+        help=f"Crop dimension divisibility (default: {_get_default('cropdetect_round')}). Use 16 for best codec alignment.",
+    )
+    _ = cropdetect_group.add_argument(
+        "--cropdetect-mv-threshold",
+        type=int,
+        default=_get_default("cropdetect_mv_threshold"),
+        dest="cropdetect_mv_threshold",
+        help="Motion vector threshold in pixels (default: FFmpeg's 8)",
+    )
+    _ = cropdetect_group.add_argument(
+        "--cropdetect-low",
+        type=float,
+        default=_get_default("cropdetect_low"),
+        dest="cropdetect_low",
+        help="Canny low threshold 0.0-1.0 (default: FFmpeg's ~0.02)",
+    )
+    _ = cropdetect_group.add_argument(
+        "--cropdetect-high",
+        type=float,
+        default=_get_default("cropdetect_high"),
+        dest="cropdetect_high",
+        help="Canny high threshold 0.0-1.0 (default: FFmpeg's ~0.06)",
     )
 
     # -------------------------------------------------------------------------
@@ -630,6 +667,36 @@ def validate_metric_decimals_args(
         )
 
 
+def validate_cropdetect_args(
+    args: PipelineArgs, parser: argparse.ArgumentParser
+) -> None:
+    """Validate cropdetect parameter combinations."""
+    if args.cropdetect_round < 1:
+        parser.error(
+            f"--cropdetect-round must be at least 1 (got {args.cropdetect_round})"
+        )
+    if args.cropdetect_limit is not None and not (0 <= args.cropdetect_limit <= 255):
+        parser.error(
+            f"--cropdetect-limit must be between 0 and 255 (got {args.cropdetect_limit})"
+        )
+    if args.cropdetect_low is not None and not (0.0 <= args.cropdetect_low <= 1.0):
+        parser.error(
+            f"--cropdetect-low must be between 0.0 and 1.0 (got {args.cropdetect_low})"
+        )
+    if args.cropdetect_high is not None and not (0.0 <= args.cropdetect_high <= 1.0):
+        parser.error(
+            f"--cropdetect-high must be between 0.0 and 1.0 (got {args.cropdetect_high})"
+        )
+    if (
+        args.cropdetect_low is not None
+        and args.cropdetect_high is not None
+        and args.cropdetect_low > args.cropdetect_high
+    ):
+        parser.error(
+            f"--cropdetect-low ({args.cropdetect_low}) must be <= --cropdetect-high ({args.cropdetect_high})"
+        )
+
+
 def _resolve_multi_profile_search(
     args: PipelineArgs,
     parser: argparse.ArgumentParser,
@@ -799,6 +866,7 @@ def validate_args(
     validate_mode_args(args, parser, has_quality_targets)
     validate_bitrate_warning_args(args, parser)
     validate_metric_decimals_args(args, parser)
+    validate_cropdetect_args(args, parser)
 
     # Validate that profile/preset/multi-profile-search is specified
     if args.profile is None and args.preset is None and not args.multi_profile_search:

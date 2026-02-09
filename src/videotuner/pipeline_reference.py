@@ -87,7 +87,7 @@ def generate_metric_reference(
     temp_dir: Path,
     display: "PipelineDisplay",
     log: logging.Logger,
-    auto_crop: bool = False,
+    crop_detect: bool = False,
     crop_values: "CropValues | None" = None,
 ) -> Path | None:
     """Generate a concatenated reference file for quality metric assessment.
@@ -108,8 +108,8 @@ def generate_metric_reference(
         temp_dir: Temporary directory for intermediate files
         display: Pipeline display for progress UI
         log: Logger for status messages
-        auto_crop: Whether to apply autocrop
-        crop_values: Crop values if autocropping
+        crop_detect: Whether to apply cropdetect
+        crop_values: Crop values for cropping
 
     Returns:
         Path to the generated reference MKV, or None if generation failed
@@ -152,7 +152,7 @@ def generate_metric_reference(
                 line_handler=enc_handler,
                 mux_handler=None,
                 perform_mux=False,
-                enable_autocrop=auto_crop,
+                enable_cropdetect=crop_detect,
                 crop_values=crop_values,
                 metric_label=metric_label,
             )

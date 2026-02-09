@@ -50,7 +50,7 @@ class IterationContext:
     display: PipelineDisplay
     log: logging.Logger
 
-    # Autocrop values (calculated once, shared across all encodes)
+    # CropDetect values (calculated once, shared across all encodes)
     crop_values: CropValues | None = None
 
     # Sample sharing: True when VMAF and SSIM2 use identical sampling parameters
