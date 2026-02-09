@@ -74,7 +74,7 @@ class PipelineArgs:
     vs_dir: Path | None = None
     vs_plugin_dir: Path | None = None
     crop_detect: bool = True
-    cropdetect_interval: int = 80
+    cropdetect_interval: int = 30
     cropdetect_mode: str = "black"
     cropdetect_limit: int | None = None
     cropdetect_round: int = 2

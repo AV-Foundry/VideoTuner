@@ -110,7 +110,7 @@ The CRF search uses interpolated binary search to efficiently find the optimal C
 **How it works:**
 
 1. **Early Pipeline Stage**: Runs immediately after building the FFMS2 index, before any encoding
-2. **Smart sampling**: Samples one frame every 80 seconds across the middle 80% of the video
+2. **Smart sampling**: Samples one frame every 30 seconds across the middle 80% of the video
 3. **Conservative cropping**: Uses the minimum (safest) crop values across all sampled frames to avoid accidentally cropping content
 4. **Consistent application**: The same crop values are applied to ALL encodes - reference clips, distorted clips, and across all phases
 
@@ -510,7 +510,7 @@ Run `videotuner --help` for complete options. Key options include:
 | Option                      | Default      | Description                                       |
 | --------------------------- | ------------ | ------------------------------------------------- |
 | `--no-cropdetect`           | -            | Disable automatic crop detection                  |
-| `--cropdetect-interval`     | `80`         | Seconds between sampled frames for crop detection |
+| `--cropdetect-interval`     | `30`         | Seconds between sampled frames for crop detection |
 | `--cropdetect-mode`         | `black`      | Detection mode: `black` or `mvedges`              |
 | `--cropdetect-limit`        | FFmpeg 24    | Black pixel threshold 0-255                       |
 | `--cropdetect-round`        | `2`          | Crop dimension divisibility (FFmpeg default: 16)  |

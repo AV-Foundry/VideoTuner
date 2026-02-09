@@ -15,9 +15,9 @@ from videotuner.tool_parsers import CROPDETECT_RE
 
 _TEST_PATH = Path("test.mkv")
 
-# Number of samples for num_frames=10000, fps=24.0, interval=80 (defaults):
-# skip=1000, safe_start=1000, safe_end=9000, step=1920 → 5 samples
-_SAMPLES_10K = len(range(1000, 9000, 1920))
+# Number of samples for num_frames=10000, fps=24.0, interval=30 (defaults):
+# skip=1000, safe_start=1000, safe_end=9000, step=720 → 12 samples
+_SAMPLES_10K = len(range(1000, 9000, 720))
 
 
 def _passthrough_resolve(p: Path, _c: Path | None) -> Path:

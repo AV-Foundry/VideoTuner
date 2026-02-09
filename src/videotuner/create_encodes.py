@@ -137,7 +137,7 @@ def calculate_cropdetect_values(
     fps: float,
     *,
     is_hdr: bool = False,
-    interval: int = 80,
+    interval: int = 30,
     ffmpeg_bin: str = "ffmpeg",
     source_width: int,
     source_height: int,
