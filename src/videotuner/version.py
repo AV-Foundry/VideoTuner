@@ -1,8 +1,29 @@
 """Version information and release notes for VideoTuner."""
 
-__version__ = "0.2.4"
+__version__ = "0.3.0"
 
 RELEASE_NOTES = """
+## 0.3.0
+
+### Breaking Changes
+
+- Rename `--no-autocrop` to `--no-cropdetect`
+- Remove VapourSynth `autocrop` plugin dependency; crop detection now uses FFmpeg's native `cropdetect` filter
+
+### Features
+
+- Add unified tonemapping module with automatic GPU acceleration (Vulkan/libplacebo) and CPU fallback (zscale/hable)
+- Replace VapourSynth-based autocrop with FFmpeg `cropdetect` for more robust, dependency-free crop detection
+- Add HDR tonemapping support for crop detection, ensuring consistent results across SDR and HDR sources
+- Add `cropdetect` CLI argument group with full parameter control: `--cropdetect-interval`, `--cropdetect-mode`, `--cropdetect-limit`, `--cropdetect-round`, `--cropdetect-mv-threshold`, `--cropdetect-low`, `--cropdetect-high`
+- Support two cropdetect modes: `black` (pixel threshold, default) and `mvedges` (motion vector + edge detection)
+- Integrate unified tonemapping into VMAF assessment with automatic GPU/CPU branching
+- Change default crop detection sampling interval to 30 seconds for denser frame sampling
+
+### Fixes
+
+- Resolve CodeQL code quality alerts: replace self-comparison NaN checks with `math.isnan()`, narrow broad exception clauses, remove dead variable assignments, replace empty except blocks with `contextlib.suppress()` or appropriate logging
+
 ## 0.2.4
 
 ### Fixes
