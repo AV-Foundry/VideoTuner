@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 import subprocess
 import sys
@@ -89,11 +90,43 @@ def clean_previous_build() -> None:
         shutil.rmtree(nuitka_cache)
 
 
+def _patch_vs_installer(script: str) -> tuple[str, list[str]]:
+    """Apply compatibility patches to the VapourSynth portable installer script.
+
+    Fixes known issues in the upstream installer that affect non-interactive use:
+    - Adds -UseBasicParsing to Invoke-WebRequest calls (Windows PowerShell 5.1's
+      IE DOM parser fails in -NonInteractive mode)
+    - Raises the Python patch version probe limit from 10 to 20 (upstream cap is
+      too low for Python 3.13+ which has exceeded 10 patch releases)
+
+    Returns:
+        Tuple of (patched script content, list of applied patch descriptions).
+        If a patch's target pattern isn't found, it is silently skipped.
+    """
+    applied: list[str] = []
+
+    # Fix 1: Add -UseBasicParsing to all Invoke-WebRequest calls
+    iwr_pattern = re.compile(r"Invoke-WebRequest\b(?!.*-UseBasicParsing)")
+    if iwr_pattern.search(script):
+        script = iwr_pattern.sub("Invoke-WebRequest -UseBasicParsing", script)
+        applied.append("Added -UseBasicParsing to Invoke-WebRequest calls")
+
+    # Fix 2: Raise the Python patch version probe limit ($i -le 10 -> $i -le 20)
+    version_limit_old = "$i -le 10"
+    version_limit_new = "$i -le 20"
+    if version_limit_old in script:
+        script = script.replace(version_limit_old, version_limit_new, 1)
+        applied.append("Raised Python patch version probe limit from 10 to 20")
+
+    return script, applied
+
+
 def install_vapoursynth_portable(target_dir: Path) -> None:
     """Download and run VapourSynth portable installer.
 
-    Downloads the official installer script from GitHub and executes it
-    to create a portable VapourSynth environment at the target directory.
+    Downloads the official installer script from GitHub, applies compatibility
+    patches for non-interactive use, and executes it to create a portable
+    VapourSynth environment at the target directory.
     """
     if target_dir.exists():
         print(f"  VapourSynth portable already exists at {target_dir}, skipping")
@@ -118,6 +151,16 @@ def install_vapoursynth_portable(target_dir: Path) -> None:
             installer_path, CHECKSUMS["vapoursynth_installer"], "VapourSynth installer"
         )
 
+        # Patch the installer for non-interactive compatibility
+        original = installer_path.read_text(encoding="utf-8")
+        patched, applied_patches = _patch_vs_installer(original)
+        if applied_patches:
+            _ = installer_path.write_text(patched, encoding="utf-8")
+            for patch_desc in applied_patches:
+                print(f"  Patched installer: {patch_desc}")
+        else:
+            print("  WARNING: No patches applied — upstream script may have changed")
+
         # Run the PowerShell installer with target folder
         # The installer creates the folder relative to its working directory,
         # so we run it from the parent of the target and specify the folder name
@@ -133,6 +176,7 @@ def install_vapoursynth_portable(target_dir: Path) -> None:
             str(installer_path),
             "-TargetFolder",
             target_name,
+            "-Unattended",
         ]
 
         print("  Running installer (this may take a minute)...")
