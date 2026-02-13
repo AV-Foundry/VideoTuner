@@ -36,8 +36,8 @@ FFMS2_URL = f"https://github.com/FFMS/ffms2/releases/download/{FFMS2_VERSION}/ff
 LSMASH_VERSION = "1266.0.0.0"
 LSMASH_URL = f"https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works/releases/download/{LSMASH_VERSION}/L-SMASH-Works-r{LSMASH_VERSION}.7z"
 
-VSZIP_VERSION = "R11"
-VSZIP_URL = f"https://github.com/dnjulek/vapoursynth-zip/releases/download/{VSZIP_VERSION}/vapoursynth-zip-r11-windows-x86_64.zip"
+VSZIP_VERSION = "R13"
+VSZIP_URL = f"https://github.com/dnjulek/vapoursynth-zip/releases/download/{VSZIP_VERSION}/vapoursynth-zip-{VSZIP_VERSION.lower()}-windows-x86_64.zip"
 VSZIP_DLL = "vszip.dll"
 
 # SHA256 checksums for integrity verification (protects against compromised downloads)
@@ -47,7 +47,7 @@ CHECKSUMS = {
     "x265": "e36b5c50c779e5625368674a5baba0aec7cd2baaa08155149a4e73033b649070",
     "ffms2": "e867a3df7262865107df40f230f5b8e1455905eba9b8852e6f35b1227537caeb",
     "lsmash": "7189f299730c82e2cef025082095628c1028effb7e7276eae5fb5c9c3f1aef00",
-    "vszip": "99cfaba01ce50d414dfd371d8c9b261f164e398a98b49bed2983fa770a143cdd",
+    "vszip": "bc7aee2d83be3ab12dcfe65abf64b276512c6fdd948ea229587a2bd58134cc24",
 }
 
 
