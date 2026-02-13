@@ -5,10 +5,13 @@ from __future__ import annotations
 import logging
 import os
 import shlex
+import subprocess
 import tempfile
+import threading
 from dataclasses import dataclass
+from io import TextIOWrapper
 from pathlib import Path
-from typing import Callable
+from typing import IO, Callable
 
 # Directory name for bundled VapourSynth portable installation
 VAPOURSYNTH_PORTABLE_DIR = "vapoursynth-portable"
@@ -193,6 +196,7 @@ class VapourSynthEnv:
     vs_plugin_dir: Path
     vsscript_dll: Path
     ffms2_dll: Path
+    vspipe_bin: Path
 
     @classmethod
     def from_cwd(cls, cwd: Path | None) -> "VapourSynthEnv":
@@ -215,6 +219,7 @@ class VapourSynthEnv:
             vs_plugin_dir=vs_plugin_dir,
             vsscript_dll=vs_dir / "VSScript.dll",
             ffms2_dll=vs_plugin_dir / "ffms2.dll",
+            vspipe_bin=vs_dir / "vspipe.exe",
         )
 
     @classmethod
@@ -249,6 +254,7 @@ class VapourSynthEnv:
             vs_plugin_dir=vs_plugin_dir,
             vsscript_dll=vs_dir / "VSScript.dll",
             ffms2_dll=vs_plugin_dir / "ffms2.dll",
+            vspipe_bin=vs_dir / "vspipe.exe",
         )
 
     def validate(self) -> None:
@@ -263,6 +269,8 @@ class VapourSynthEnv:
             )
         if not self.ffms2_dll.exists():
             raise FileNotFoundError(f"FFMS2 plugin not found at: {self.ffms2_dll}")
+        if not self.vspipe_bin.exists():
+            raise FileNotFoundError(f"vspipe not found at: {self.vspipe_bin}")
 
     def build_env(self, base_env: dict[str, str] | None = None) -> dict[str, str]:
         """Build comprehensive environment dict with all VapourSynth paths.
@@ -517,17 +525,15 @@ def build_sampling_vpy_script(
 
 def build_x265_command(
     paths: EncoderPaths,
-    vpy_path: Path,
     hevc_path: Path,
     x265_params: list[str],
     preset: str | None,
     cwd: Path | None = None,
 ) -> list[str]:
-    """Build x265 command line arguments.
+    """Build x265 command line arguments for piped y4m input.
 
     Args:
         paths: Resolved encoder paths
-        vpy_path: Path to VapourSynth script
         hevc_path: Output HEVC path
         x265_params: Additional x265 parameters
         preset: x265 preset (or None)
@@ -537,54 +543,152 @@ def build_x265_command(
         List of command arguments for x265
     """
     abs_hevc_path = resolve_absolute_path(hevc_path, cwd)
-    abs_vpy_path = resolve_absolute_path(vpy_path, cwd)
 
-    x265_args = [
-        str(paths.x265_bin),
-        f"--reader-options=library={paths.vs_env.vsscript_dll}",
-    ]
+    x265_args = [str(paths.x265_bin)]
 
     if preset is not None:
         x265_args += ["--preset", preset]
 
     x265_args += ["--output", str(abs_hevc_path)]
     x265_args += x265_params
-    x265_args += ["--input", str(abs_vpy_path)]
+    x265_args += ["--y4m", "--input", "-"]
 
     return x265_args
 
 
-def run_x265_encode(
+def build_vspipe_command(
+    vs_env: VapourSynthEnv,
+    vpy_path: Path,
+    cwd: Path | None = None,
+) -> list[str]:
+    """Build vspipe command to output y4m to stdout.
+
+    Args:
+        vs_env: VapourSynth environment with vspipe path
+        vpy_path: Path to VapourSynth script
+        cwd: Working directory for path resolution
+
+    Returns:
+        List of command arguments for vspipe
+    """
+    abs_vpy_path = resolve_absolute_path(vpy_path, cwd)
+    return [str(vs_env.vspipe_bin), "-c", "y4m", str(abs_vpy_path), "-"]
+
+
+def run_vspipe_x265_encode(
+    vspipe_args: list[str],
     x265_args: list[str],
     vs_env: dict[str, str],
     cwd: Path | None,
     line_handler: Callable[[str], bool] | None,
-    run_capture_fn: Callable[..., str],
 ) -> str:
-    """Run x265 encoding process.
+    """Run vspipe | x265 encoding pipeline.
+
+    Pipes vspipe y4m output to x265 stdin, avoiding direct VapourSynth
+    readout which has thread-safety bugs in the x265 VPY reader.
 
     Args:
+        vspipe_args: Command arguments for vspipe
         x265_args: Command arguments for x265
         vs_env: Environment with VapourSynth paths
         cwd: Working directory
-        line_handler: Optional callback for progress
-        run_capture_fn: Function to run subprocess (for dependency injection)
+        line_handler: Optional callback for progress lines
 
     Returns:
-        Process output string
+        Combined process output string
 
     Raises:
-        Exception: If encoding fails
+        RuntimeError: If either process fails
     """
+    from .utils import format_command_error, iter_stream_output
+
     log = logging.getLogger(__name__)
+    log.info("vspipe cmd: %s", " ".join(shlex.quote(str(c)) for c in vspipe_args))
     log.info("x265 cmd: %s", " ".join(shlex.quote(str(c)) for c in x265_args))
 
-    return run_capture_fn(
-        x265_args,
-        cwd=cwd,
-        env=vs_env,
-        line_callback=line_handler,
-    )
+    cwd_str = str(cwd) if cwd else None
+    captured: list[str] = []
+    vspipe_errors: list[str] = []
+
+    try:
+        vspipe_proc = subprocess.Popen(
+            vspipe_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd_str,
+            env=vs_env,
+        )
+    except FileNotFoundError as e:
+        raise RuntimeError(f"Command not found: {vspipe_args[0]}") from e
+
+    try:
+        x265_proc = subprocess.Popen(
+            x265_args,
+            stdin=vspipe_proc.stdout,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd_str,
+            env=vs_env,
+        )
+    except FileNotFoundError as e:
+        vspipe_proc.kill()
+        _ = vspipe_proc.wait()
+        raise RuntimeError(f"Command not found: {x265_args[0]}") from e
+
+    # Close vspipe stdout in parent so x265 gets EOF when vspipe finishes
+    assert vspipe_proc.stdout is not None
+    vspipe_proc.stdout.close()
+
+    # Read x265 stderr for progress and vspipe stderr for errors
+    assert x265_proc.stdout is not None
+    assert x265_proc.stderr is not None
+    assert vspipe_proc.stderr is not None
+
+    def _read_x265_stream(stream: IO[bytes]) -> None:
+        wrapper = TextIOWrapper(stream, encoding="utf-8", errors="replace")
+        try:
+            for line in iter_stream_output(wrapper):
+                captured.append(line)
+                if line and line_handler is not None:
+                    try:
+                        _ = line_handler(line)
+                    except Exception:
+                        log.debug("Progress callback error", exc_info=True)
+        finally:
+            _ = wrapper.detach()
+
+    def _read_vspipe_stderr(stream: IO[bytes]) -> None:
+        wrapper = TextIOWrapper(stream, encoding="utf-8", errors="replace")
+        try:
+            for line in iter_stream_output(wrapper):
+                if line:
+                    vspipe_errors.append(line)
+                    log.debug("vspipe: %s", line)
+        finally:
+            _ = wrapper.detach()
+
+    threads = [
+        threading.Thread(target=_read_x265_stream, args=(x265_proc.stdout,)),
+        threading.Thread(target=_read_x265_stream, args=(x265_proc.stderr,)),
+        threading.Thread(target=_read_vspipe_stderr, args=(vspipe_proc.stderr,)),
+    ]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    x265_ret = x265_proc.wait()
+    vspipe_ret = vspipe_proc.wait()
+
+    if vspipe_ret != 0:
+        error_detail = "\n".join(vspipe_errors) if vspipe_errors else ""
+        raise RuntimeError(format_command_error(vspipe_ret, vspipe_args, error_detail))
+    if x265_ret != 0:
+        raise RuntimeError(
+            format_command_error(x265_ret, x265_args, "\n".join(captured))
+        )
+
+    return "\n".join(captured)
 
 
 def mux_and_cleanup(

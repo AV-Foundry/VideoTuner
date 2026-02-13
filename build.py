@@ -22,11 +22,11 @@ RELEASE_DIR = DIST_DIR / RELEASE_NAME
 
 # External dependency URLs and versions
 # x265 encoder
-X265_VERSION = "4.1+212+35"
-X265_URL = "https://github.com/Patman86/x265-Mod-by-Patman/releases/download/4.1%2B212%2B35/x265-4.1+212+35-87f5a69a8-.Mod-by-Patman.-x64-avx2-clang2117.7z"
+X265_VERSION = "4.1+223+43"
+X265_URL = "https://github.com/Patman86/x265-Mod-by-Patman/releases/download/4.1%2B223%2B43/x265-4.1+223+43-5b546048f-.Mod-by-Patman.-x64-avx2-clang2118.7z"
 
 # VapourSynth portable environment
-VAPOURSYNTH_VERSION = "R72"
+VAPOURSYNTH_VERSION = "R73"
 VAPOURSYNTH_INSTALLER_URL = f"https://github.com/vapoursynth/vapoursynth/releases/download/{VAPOURSYNTH_VERSION}/Install-Portable-VapourSynth-{VAPOURSYNTH_VERSION}.ps1"
 
 # VapourSynth plugins (all x64)
@@ -43,8 +43,8 @@ VSZIP_DLL = "vszip.dll"
 # SHA256 checksums for integrity verification (protects against compromised downloads)
 # To update: download file, run: python -c "import hashlib; print(hashlib.sha256(open('file','rb').read()).hexdigest())"
 CHECKSUMS = {
-    "vapoursynth_installer": "ac9faf0f009f81fe108018b1ca424355627b93c145bee43f7f8ef62279fa5170",
-    "x265": "cd3509c3ed13c8376e702a574bf95c5a05f27afbe24cdf8268f315167ef80f90",
+    "vapoursynth_installer": "5f984e341c2264244b6549e71dd842af74a17274b6bfd494bc25e6c0e2f37439",
+    "x265": "e36b5c50c779e5625368674a5baba0aec7cd2baaa08155149a4e73033b649070",
     "ffms2": "e867a3df7262865107df40f230f5b8e1455905eba9b8852e6f35b1227537caeb",
     "lsmash": "7189f299730c82e2cef025082095628c1028effb7e7276eae5fb5c9c3f1aef00",
     "vszip": "99cfaba01ce50d414dfd371d8c9b261f164e398a98b49bed2983fa770a143cdd",

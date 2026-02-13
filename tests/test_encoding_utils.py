@@ -9,6 +9,8 @@ import pytest
 
 from videotuner.encoding_utils import (
     HDR_TRANSFER_CHARACTERISTICS,
+    build_vspipe_command,
+    build_x265_command,
     create_temp_encode_paths,
     get_vapoursynth_portable_dir,
     get_x265_bin,
@@ -266,6 +268,7 @@ class TestVapourSynthEnv:
             env.ffms2_dll == Path("vapoursynth-portable") / "vs-plugins" / "ffms2.dll"
         )
         assert env.vs_plugin_dir == Path("vapoursynth-portable") / "vs-plugins"
+        assert env.vspipe_bin == Path("vapoursynth-portable") / "vspipe.exe"
 
     def test_from_cwd_with_path(self):
         """Test from_cwd returns paths relative to cwd."""
@@ -277,6 +280,7 @@ class TestVapourSynthEnv:
             "C:/project/vapoursynth-portable/vs-plugins/ffms2.dll"
         )
         assert env.vs_plugin_dir == Path("C:/project/vapoursynth-portable/vs-plugins")
+        assert env.vspipe_bin == Path("C:/project/vapoursynth-portable/vspipe.exe")
 
     def test_from_args_uses_provided_paths(self):
         """Test from_args uses CLI-provided paths."""
@@ -316,6 +320,22 @@ class TestVapourSynthEnv:
                 env.validate()
             assert "ffms2.dll" in str(exc_info.value)
 
+    def test_validate_raises_when_vspipe_missing(self):
+        """Test validate raises FileNotFoundError when vspipe.exe is missing."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            vs_dir = cwd / "vapoursynth-portable"
+            plugins_dir = vs_dir / "vs-plugins"
+            plugins_dir.mkdir(parents=True)
+            (vs_dir / "VSScript.dll").touch()
+            (plugins_dir / "ffms2.dll").touch()
+
+            env = VapourSynthEnv.from_cwd(cwd)
+
+            with pytest.raises(FileNotFoundError) as exc_info:
+                env.validate()
+            assert "vspipe" in str(exc_info.value)
+
     def test_validate_passes_when_files_exist(self):
         """Test validate passes when all required files exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -324,6 +344,7 @@ class TestVapourSynthEnv:
             plugins_dir = vs_dir / "vs-plugins"
             plugins_dir.mkdir(parents=True)
             (vs_dir / "VSScript.dll").touch()
+            (vs_dir / "vspipe.exe").touch()
             (plugins_dir / "ffms2.dll").touch()
 
             env = VapourSynthEnv.from_cwd(cwd)
@@ -409,6 +430,7 @@ class TestEncoderPaths:
             plugins_dir = vs_dir / "vs-plugins"
             plugins_dir.mkdir(parents=True)
             (vs_dir / "VSScript.dll").touch()
+            (vs_dir / "vspipe.exe").touch()
             (plugins_dir / "ffms2.dll").touch()
 
             paths = EncoderPaths.from_cwd(cwd)
@@ -528,3 +550,86 @@ class TestCalculateUsableFrames:
             guard_end_frames=50,
         )
         assert result == 1
+
+
+class TestBuildX265Command:
+    """Tests for build_x265_command function."""
+
+    def test_uses_y4m_stdin_input(self):
+        """Test command reads y4m from stdin instead of a .vpy file."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        args = build_x265_command(
+            paths=paths,
+            hevc_path=Path("output.hevc"),
+            x265_params=["--crf", "18"],
+            preset="medium",
+            cwd=Path("C:/project"),
+        )
+        assert "--y4m" in args
+        assert "--input" in args
+        assert args[args.index("--input") + 1] == "-"
+
+    def test_no_reader_options(self):
+        """Test command does not include --reader-options (no direct VS loading)."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        args = build_x265_command(
+            paths=paths,
+            hevc_path=Path("output.hevc"),
+            x265_params=[],
+            preset="medium",
+            cwd=Path("C:/project"),
+        )
+        assert not any("reader-options" in a for a in args)
+
+    def test_includes_preset_and_output(self):
+        """Test command includes preset and output path."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        args = build_x265_command(
+            paths=paths,
+            hevc_path=Path("output.hevc"),
+            x265_params=["--crf", "20"],
+            preset="slow",
+            cwd=Path("C:/project"),
+        )
+        assert "--preset" in args
+        assert "slow" in args
+        assert "--output" in args
+
+    def test_no_preset(self):
+        """Test command omits --preset when preset is None."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        args = build_x265_command(
+            paths=paths,
+            hevc_path=Path("output.hevc"),
+            x265_params=[],
+            preset=None,
+            cwd=Path("C:/project"),
+        )
+        assert "--preset" not in args
+
+
+class TestBuildVspipeCommand:
+    """Tests for build_vspipe_command function."""
+
+    def test_basic_command(self):
+        """Test basic vspipe command structure."""
+        vs_env = VapourSynthEnv.from_cwd(Path("C:/project"))
+        args = build_vspipe_command(
+            vs_env=vs_env,
+            vpy_path=Path("script.vpy"),
+            cwd=Path("C:/project"),
+        )
+        assert args[0] == str(Path("C:/project/vapoursynth-portable/vspipe.exe"))
+        assert "-c" in args
+        assert "y4m" in args
+        assert args[-1] == "-"
+
+    def test_resolves_vpy_path(self):
+        """Test vpy path is resolved to absolute."""
+        vs_env = VapourSynthEnv.from_cwd(Path("C:/project"))
+        args = build_vspipe_command(
+            vs_env=vs_env,
+            vpy_path=Path("temp/script.vpy"),
+            cwd=Path("C:/project"),
+        )
+        assert str(Path("C:/project/temp/script.vpy")) in args
