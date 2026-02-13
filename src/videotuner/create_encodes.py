@@ -16,6 +16,7 @@ from .encoding_utils import (
     EncoderPaths,
     SamplingParams,
     build_sampling_vpy_script,
+    build_vspipe_command,
     build_x265_command,
     calculate_sample_count,
     calculate_usable_range,
@@ -23,7 +24,7 @@ from .encoding_utils import (
     is_hdr_video,
     mux_and_cleanup,
     resolve_absolute_path,
-    run_x265_encode,
+    run_vspipe_x265_encode,
     write_vpy_script,
     VapourSynthEnv,
 )
@@ -422,18 +423,18 @@ def encode_x265_concatenated_reference(
     )
     log.debug("VapourSynth script:\n%s", vpy_content)
 
-    # Build and run x265 command
+    # Build and run vspipe | x265 pipeline
+    vspipe_args = build_vspipe_command(vs_env=paths.vs_env, vpy_path=vpy_path, cwd=cwd)
     x265_args = build_x265_command(
         paths=paths,
-        vpy_path=vpy_path,
         hevc_path=hevc_path,
         x265_params=x265_params,
         preset=profile.preset,
         cwd=cwd,
     )
 
-    vs_env = paths.vs_env.build_env()
-    _ = run_x265_encode(x265_args, vs_env, cwd, line_handler, run_capture)
+    env = paths.vs_env.build_env()
+    _ = run_vspipe_x265_encode(vspipe_args, x265_args, env, cwd, line_handler)
 
     # Mux and cleanup
     final_output = mux_and_cleanup(
@@ -580,18 +581,18 @@ def encode_x265_concatenated_distorted(
     )
     log.debug("VapourSynth script:\n%s", vpy_content)
 
-    # Build and run x265 command
+    # Build and run vspipe | x265 pipeline
+    vspipe_args = build_vspipe_command(vs_env=paths.vs_env, vpy_path=vpy_path, cwd=cwd)
     x265_args = build_x265_command(
         paths=paths,
-        vpy_path=vpy_path,
         hevc_path=hevc_path,
         x265_params=x265_params,
         preset=profile.preset,
         cwd=cwd,
     )
 
-    vs_env = paths.vs_env.build_env()
-    _ = run_x265_encode(x265_args, vs_env, cwd, line_handler, run_capture)
+    env = paths.vs_env.build_env()
+    _ = run_vspipe_x265_encode(vspipe_args, x265_args, env, cwd, line_handler)
 
     # Mux and cleanup
     final_output = mux_and_cleanup(
@@ -779,10 +780,10 @@ def encode_x265_concatenated_bitrate(
     log.info("%s", vpy_content)
     log_separator(log)
 
-    # Build x265 command
+    # Build vspipe | x265 pipeline
+    vspipe_args = build_vspipe_command(vs_env=paths.vs_env, vpy_path=vpy_path, cwd=cwd)
     x265_args = build_x265_command(
         paths=paths,
-        vpy_path=vpy_path,
         hevc_path=hevc_path,
         x265_params=x265_params,
         preset=profile.preset,
@@ -794,12 +795,12 @@ def encode_x265_concatenated_bitrate(
     abs_hevc_path = resolve_absolute_path(hevc_path, cwd)
 
     log_separator(log)
-    log.info("x265 Execution Details:")
+    log.info("Encoding Details:")
     log.info("  x265 binary: %s (exists: %s)", paths.x265_bin, paths.x265_bin.exists())
     log.info(
-        "  VapourSynth DLL: %s (exists: %s)",
-        paths.vs_env.vsscript_dll,
-        paths.vs_env.vsscript_dll.exists(),
+        "  vspipe binary: %s (exists: %s)",
+        paths.vs_env.vspipe_bin,
+        paths.vs_env.vspipe_bin.exists(),
     )
     log.info(
         "  FFMS2 DLL: %s (exists: %s)",
@@ -812,23 +813,22 @@ def encode_x265_concatenated_bitrate(
         log.info("  Stats file: %s", stats_file)
     log.info("  Working directory: %s", cwd)
     log_separator(log)
+    log.info("Full vspipe command:")
+    log.info("  %s", " ".join(shlex.quote(str(c)) for c in vspipe_args))
     log.info("Full x265 command:")
     log.info("  %s", " ".join(shlex.quote(str(c)) for c in x265_args))
     log_separator(log)
 
     # Setup VapourSynth environment
-    vs_env = paths.vs_env.build_env()
+    env = paths.vs_env.build_env()
 
     log.info("Starting x265 encoding...")
 
     try:
-        # Run x265 and capture all output for debugging
+        # Run vspipe | x265 pipeline and capture output for debugging
         try:
-            output = run_capture(
-                x265_args,
-                cwd=cwd,
-                env=vs_env,
-                line_callback=line_handler,
+            output = run_vspipe_x265_encode(
+                vspipe_args, x265_args, env, cwd, line_handler
             )
             log_separator(log)
             log.info("x265 output (last 50 lines):")
