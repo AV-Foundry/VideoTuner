@@ -42,8 +42,8 @@ def get_app_root() -> Path:
     In development: Returns the repo root (3 levels up from this file).
     When bundled: Returns the directory containing the executable.
 
-    This allows bundled tools (x265, vapoursynth-portable) and config files
-    (x265_profiles.yaml) to be found relative to the application.
+    This allows bundled tools (x264, x265, vapoursynth-portable) and config files
+    (profiles.yaml) to be found relative to the application.
 
     Returns:
         Path to the application root directory.

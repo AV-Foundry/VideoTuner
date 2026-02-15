@@ -7,13 +7,16 @@ from pathlib import Path
 
 import pytest
 
+from videotuner.encoder_type import EncoderType
 from videotuner.encoding_utils import (
     HDR_TRANSFER_CHARACTERISTICS,
     build_vspipe_command,
+    build_x264_command,
     build_x265_command,
+    build_encoder_command,
     create_temp_encode_paths,
     get_vapoursynth_portable_dir,
-    get_x265_bin,
+    get_encoder_bin,
     is_hdr_video,
     resolve_absolute_path,
     calculate_usable_frames,
@@ -86,25 +89,37 @@ class TestHDRDetection:
         assert "arib std-b67" in HDR_TRANSFER_CHARACTERISTICS
 
 
-class TestGetX265Bin:
-    """Tests for x265 binary path resolution."""
+class TestGetEncoderBin:
+    """Tests for encoder binary path resolution."""
 
-    def test_returns_relative_path_when_no_cwd(self):
+    def test_x265_returns_relative_path_when_no_cwd(self):
         """Test returns relative path when cwd is None."""
-        result = get_x265_bin(cwd=None)
+        result = get_encoder_bin(EncoderType.X265, cwd=None)
         assert result == Path("tools") / "x265.exe"
         assert not result.is_absolute()
 
-    def test_returns_absolute_path_when_cwd_provided(self):
+    def test_x265_returns_absolute_path_when_cwd_provided(self):
         """Test returns absolute path when cwd is provided."""
         cwd = Path("C:/test/dir")
-        result = get_x265_bin(cwd=cwd)
+        result = get_encoder_bin(EncoderType.X265, cwd=cwd)
         assert result == Path("C:/test/dir") / "tools" / "x265.exe"
+
+    def test_x264_returns_relative_path_when_no_cwd(self):
+        """Test x264 returns relative path when cwd is None."""
+        result = get_encoder_bin(EncoderType.X264, cwd=None)
+        assert result == Path("tools") / "x264.exe"
+        assert not result.is_absolute()
+
+    def test_x264_returns_absolute_path_when_cwd_provided(self):
+        """Test x264 returns absolute path when cwd is provided."""
+        cwd = Path("C:/test/dir")
+        result = get_encoder_bin(EncoderType.X264, cwd=cwd)
+        assert result == Path("C:/test/dir") / "tools" / "x264.exe"
 
     def test_preserves_cwd_path_type(self):
         """Test preserves the type of cwd (Path or string-like)."""
         cwd = Path("/home/user/project")
-        result = get_x265_bin(cwd=cwd)
+        result = get_encoder_bin(EncoderType.X265, cwd=cwd)
         assert isinstance(result, Path)
         # Check the path ends with the expected components (platform-agnostic)
         assert result.name == "x265.exe"
@@ -170,37 +185,57 @@ class TestResolveAbsolutePath:
 class TestCreateTempEncodePaths:
     """Tests for temporary encode path creation."""
 
-    def test_creates_paths_in_system_temp_by_default(self):
-        """Test creates paths in system temp when temp_dir is None."""
-        vpy_path, hevc_path = create_temp_encode_paths(temp_dir=None)
+    def test_creates_x265_paths_in_system_temp_by_default(self):
+        """Test creates x265 paths in system temp when temp_dir is None."""
+        vpy_path, bitstream_path = create_temp_encode_paths(
+            EncoderType.X265, temp_dir=None
+        )
 
         # Should be in system temp directory
         assert vpy_path.suffix == ".vpy"
-        assert hevc_path.suffix == ".hevc"
+        assert bitstream_path.suffix == ".hevc"
         assert vpy_path.is_absolute()
-        assert hevc_path.is_absolute()
+        assert bitstream_path.is_absolute()
 
         # Clean up
         try:
             vpy_path.unlink(missing_ok=True)
-            hevc_path.unlink(missing_ok=True)
+            bitstream_path.unlink(missing_ok=True)
+        except OSError:  # Best-effort cleanup; ignore failures in tests
+            pass
+
+    def test_creates_x264_paths_with_correct_extension(self):
+        """Test creates x264 paths with .264 extension."""
+        vpy_path, bitstream_path = create_temp_encode_paths(
+            EncoderType.X264, temp_dir=None
+        )
+
+        assert vpy_path.suffix == ".vpy"
+        assert bitstream_path.suffix == ".264"
+
+        # Clean up
+        try:
+            vpy_path.unlink(missing_ok=True)
+            bitstream_path.unlink(missing_ok=True)
         except OSError:  # Best-effort cleanup; ignore failures in tests
             pass
 
     def test_creates_paths_with_name_in_system_temp(self):
         """Test name is used as prefix when temp_dir is None."""
-        vpy_path, hevc_path = create_temp_encode_paths(temp_dir=None, name="mytest")
+        vpy_path, bitstream_path = create_temp_encode_paths(
+            EncoderType.X265, temp_dir=None, name="mytest"
+        )
 
         # When using system temp, name is used as prefix, but files still use random names
         # Just verify they have the right extensions and the prefix is included
         assert vpy_path.suffix == ".vpy"
-        assert hevc_path.suffix == ".hevc"
+        assert bitstream_path.suffix == ".hevc"
         assert "mytest" in vpy_path.name
 
         # Clean up
         try:
             vpy_path.unlink(missing_ok=True)
-            hevc_path.unlink(missing_ok=True)
+            bitstream_path.unlink(missing_ok=True)
         except OSError:  # Best-effort cleanup; ignore failures in tests
             pass
 
@@ -208,25 +243,40 @@ class TestCreateTempEncodePaths:
         """Test creates paths in custom temp directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_dir = Path(tmpdir)
-            vpy_path, hevc_path = create_temp_encode_paths(temp_dir=temp_dir)
+            vpy_path, bitstream_path = create_temp_encode_paths(
+                EncoderType.X265, temp_dir=temp_dir
+            )
 
             assert vpy_path.parent == temp_dir
-            assert hevc_path.parent == temp_dir
+            assert bitstream_path.parent == temp_dir
             assert vpy_path.name == "encode.vpy"
-            assert hevc_path.name == "encode.hevc"
+            assert bitstream_path.name == "encode.hevc"
+
+    def test_creates_x264_paths_in_custom_temp_dir(self):
+        """Test creates x264 paths with .264 extension in custom directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_dir = Path(tmpdir)
+            vpy_path, bitstream_path = create_temp_encode_paths(
+                EncoderType.X264, temp_dir=temp_dir
+            )
+
+            assert vpy_path.parent == temp_dir
+            assert bitstream_path.parent == temp_dir
+            assert vpy_path.name == "encode.vpy"
+            assert bitstream_path.name == "encode.264"
 
     def test_creates_paths_in_custom_temp_dir_with_custom_name(self):
         """Test creates paths in custom directory with custom name."""
         with tempfile.TemporaryDirectory() as tmpdir:
             temp_dir = Path(tmpdir)
-            vpy_path, hevc_path = create_temp_encode_paths(
-                temp_dir=temp_dir, name="iteration_5"
+            vpy_path, bitstream_path = create_temp_encode_paths(
+                EncoderType.X265, temp_dir=temp_dir, name="iteration_5"
             )
 
             assert vpy_path.parent == temp_dir
-            assert hevc_path.parent == temp_dir
+            assert bitstream_path.parent == temp_dir
             assert vpy_path.name == "iteration_5.vpy"
-            assert hevc_path.name == "iteration_5.hevc"
+            assert bitstream_path.name == "iteration_5.hevc"
 
     def test_creates_temp_dir_if_not_exists(self):
         """Test creates temp directory if it doesn't exist."""
@@ -234,15 +284,17 @@ class TestCreateTempEncodePaths:
             temp_dir = Path(tmpdir) / "subdir" / "nested"
             assert not temp_dir.exists()
 
-            vpy_path, hevc_path = create_temp_encode_paths(temp_dir=temp_dir)
+            vpy_path, bitstream_path = create_temp_encode_paths(
+                EncoderType.X265, temp_dir=temp_dir
+            )
 
             assert temp_dir.exists()
             assert vpy_path.parent == temp_dir
-            assert hevc_path.parent == temp_dir
+            assert bitstream_path.parent == temp_dir
 
     def test_returns_tuple_of_paths(self):
-        """Test returns tuple of (vpy_path, hevc_path)."""
-        result = create_temp_encode_paths(temp_dir=None)
+        """Test returns tuple of (vpy_path, bitstream_path)."""
+        result = create_temp_encode_paths(EncoderType.X265, temp_dir=None)
         assert isinstance(result, tuple)
         assert len(result) == 2
         assert isinstance(result[0], Path)
@@ -379,24 +431,31 @@ class TestVapourSynthEnv:
 class TestEncoderPaths:
     """Tests for EncoderPaths dataclass."""
 
-    def test_from_cwd_with_none(self):
-        """Test from_cwd returns relative paths when cwd is None."""
-        paths = EncoderPaths.from_cwd(None)
-        assert paths.x265_bin == Path("tools") / "x265.exe"
+    def test_from_cwd_x265_with_none(self):
+        """Test from_cwd returns relative x265 paths when cwd is None."""
+        paths = EncoderPaths.from_cwd(None, EncoderType.X265)
+        assert paths.encoder_bin == Path("tools") / "x265.exe"
+        assert paths.encoder_type == EncoderType.X265
         assert paths.vs_env.vs_dir == Path("vapoursynth-portable")
+
+    def test_from_cwd_x264_with_none(self):
+        """Test from_cwd returns relative x264 paths when cwd is None."""
+        paths = EncoderPaths.from_cwd(None, EncoderType.X264)
+        assert paths.encoder_bin == Path("tools") / "x264.exe"
+        assert paths.encoder_type == EncoderType.X264
 
     def test_from_cwd_with_path(self):
         """Test from_cwd returns paths relative to cwd."""
         cwd = Path("C:/project")
-        paths = EncoderPaths.from_cwd(cwd)
-        assert paths.x265_bin == Path("C:/project/tools/x265.exe")
+        paths = EncoderPaths.from_cwd(cwd, EncoderType.X265)
+        assert paths.encoder_bin == Path("C:/project/tools/x265.exe")
         assert paths.vs_env.vs_dir == Path("C:/project/vapoursynth-portable")
 
-    def test_validate_raises_when_x265_missing(self):
-        """Test validate raises FileNotFoundError when x265.exe is missing."""
+    def test_validate_raises_when_encoder_missing(self):
+        """Test validate raises FileNotFoundError when encoder binary is missing."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cwd = Path(tmpdir)
-            paths = EncoderPaths.from_cwd(cwd)
+            paths = EncoderPaths.from_cwd(cwd, EncoderType.X265)
 
             with pytest.raises(FileNotFoundError) as exc_info:
                 paths.validate()
@@ -410,7 +469,7 @@ class TestEncoderPaths:
             tools_dir.mkdir(parents=True)
             (tools_dir / "x265.exe").touch()
 
-            paths = EncoderPaths.from_cwd(cwd)
+            paths = EncoderPaths.from_cwd(cwd, EncoderType.X265)
 
             with pytest.raises(FileNotFoundError) as exc_info:
                 paths.validate()
@@ -421,7 +480,7 @@ class TestEncoderPaths:
         """Test validate passes when all required files exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
             cwd = Path(tmpdir)
-            # Create x265
+            # Create encoder
             tools_dir = cwd / "tools"
             tools_dir.mkdir(parents=True)
             (tools_dir / "x265.exe").touch()
@@ -433,13 +492,13 @@ class TestEncoderPaths:
             (vs_dir / "vspipe.exe").touch()
             (plugins_dir / "ffms2.dll").touch()
 
-            paths = EncoderPaths.from_cwd(cwd)
+            paths = EncoderPaths.from_cwd(cwd, EncoderType.X265)
             # Should not raise
             paths.validate()
 
     def test_nested_vs_env_accessible(self):
         """Test that VapourSynthEnv is accessible via vs_env."""
-        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X265)
         assert isinstance(paths.vs_env, VapourSynthEnv)
         assert paths.vs_env.vsscript_dll == Path(
             "C:/project/vapoursynth-portable/VSScript.dll"
@@ -447,9 +506,9 @@ class TestEncoderPaths:
 
     def test_frozen_dataclass(self):
         """Test EncoderPaths is frozen (immutable)."""
-        paths = EncoderPaths.from_cwd(None)
+        paths = EncoderPaths.from_cwd(None, EncoderType.X265)
         with pytest.raises(AttributeError):
-            setattr(paths, "x265_bin", Path("new/path"))
+            setattr(paths, "encoder_bin", Path("new/path"))
 
 
 class TestCalculateUsableFrames:
@@ -557,11 +616,11 @@ class TestBuildX265Command:
 
     def test_uses_y4m_stdin_input(self):
         """Test command reads y4m from stdin instead of a .vpy file."""
-        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X265)
         args = build_x265_command(
             paths=paths,
-            hevc_path=Path("output.hevc"),
-            x265_params=["--crf", "18"],
+            output_path=Path("output.hevc"),
+            encoder_params=["--crf", "18"],
             preset="medium",
             cwd=Path("C:/project"),
         )
@@ -571,11 +630,11 @@ class TestBuildX265Command:
 
     def test_no_reader_options(self):
         """Test command does not include --reader-options (no direct VS loading)."""
-        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X265)
         args = build_x265_command(
             paths=paths,
-            hevc_path=Path("output.hevc"),
-            x265_params=[],
+            output_path=Path("output.hevc"),
+            encoder_params=[],
             preset="medium",
             cwd=Path("C:/project"),
         )
@@ -583,11 +642,11 @@ class TestBuildX265Command:
 
     def test_includes_preset_and_output(self):
         """Test command includes preset and output path."""
-        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X265)
         args = build_x265_command(
             paths=paths,
-            hevc_path=Path("output.hevc"),
-            x265_params=["--crf", "20"],
+            output_path=Path("output.hevc"),
+            encoder_params=["--crf", "20"],
             preset="slow",
             cwd=Path("C:/project"),
         )
@@ -597,15 +656,91 @@ class TestBuildX265Command:
 
     def test_no_preset(self):
         """Test command omits --preset when preset is None."""
-        paths = EncoderPaths.from_cwd(Path("C:/project"))
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X265)
         args = build_x265_command(
             paths=paths,
-            hevc_path=Path("output.hevc"),
-            x265_params=[],
+            output_path=Path("output.hevc"),
+            encoder_params=[],
             preset=None,
             cwd=Path("C:/project"),
         )
         assert "--preset" not in args
+
+
+class TestBuildX264Command:
+    """Tests for build_x264_command function."""
+
+    def test_uses_y4m_demuxer_with_positional_input(self):
+        """Test x264 command uses --demuxer y4m and positional '-' input."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X264)
+        args = build_x264_command(
+            paths=paths,
+            output_path=Path("output.264"),
+            encoder_params=["--crf", "18"],
+            preset="medium",
+            cwd=Path("C:/project"),
+        )
+        assert "--demuxer" in args
+        assert "y4m" in args
+        assert args[-1] == "-"
+
+    def test_includes_preset_and_output(self):
+        """Test x264 command includes preset and output path."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X264)
+        args = build_x264_command(
+            paths=paths,
+            output_path=Path("output.264"),
+            encoder_params=["--crf", "20"],
+            preset="slow",
+            cwd=Path("C:/project"),
+        )
+        assert "--preset" in args
+        assert "slow" in args
+        assert "--output" in args
+
+    def test_no_preset(self):
+        """Test x264 command omits --preset when preset is None."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X264)
+        args = build_x264_command(
+            paths=paths,
+            output_path=Path("output.264"),
+            encoder_params=[],
+            preset=None,
+            cwd=Path("C:/project"),
+        )
+        assert "--preset" not in args
+
+
+class TestBuildEncoderCommand:
+    """Tests for build_encoder_command dispatcher."""
+
+    def test_dispatches_to_x265(self):
+        """Test dispatches to x265 command builder."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X265)
+        args = build_encoder_command(
+            paths=paths,
+            output_path=Path("output.hevc"),
+            encoder_params=["--crf", "18"],
+            preset="medium",
+            cwd=Path("C:/project"),
+        )
+        # x265 uses --y4m --input -
+        assert "--y4m" in args
+        assert "--input" in args
+
+    def test_dispatches_to_x264(self):
+        """Test dispatches to x264 command builder."""
+        paths = EncoderPaths.from_cwd(Path("C:/project"), EncoderType.X264)
+        args = build_encoder_command(
+            paths=paths,
+            output_path=Path("output.264"),
+            encoder_params=["--crf", "18"],
+            preset="medium",
+            cwd=Path("C:/project"),
+        )
+        # x264 uses --demuxer y4m ... -
+        assert "--demuxer" in args
+        assert args[-1] == "-"
 
 
 class TestBuildVspipeCommand:

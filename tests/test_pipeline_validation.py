@@ -556,11 +556,12 @@ class TestValidateArgsCLI:
             _ = validate_args(args, parser)
 
     def test_accepts_preset_alone(self, parser: argparse.ArgumentParser) -> None:
-        """Verify --preset alone is valid (with required targets)."""
+        """Verify --preset with --encoder is valid (with required targets)."""
         args = PipelineArgs(
             input=Path("test.mkv"),
             output=Path("output"),
             preset="slow",
+            encoder="x265",
             vmaf_target=95.0,
         )
         result = validate_args(args, parser)
@@ -575,11 +576,25 @@ class TestValidateArgsCLI:
             input=Path("test.mkv"),
             output=Path("output"),
             preset="medium",
+            encoder="x265",
             assessment_only=True,
         )
         result = validate_args(args, parser)
         assert result.selected_profile is not None
         assert result.selected_profile.name == "preset-medium"
+
+    def test_errors_when_preset_without_encoder(
+        self, parser: argparse.ArgumentParser
+    ) -> None:
+        """Verify --preset without --encoder errors."""
+        args = PipelineArgs(
+            input=Path("test.mkv"),
+            output=Path("output"),
+            preset="slow",
+            vmaf_target=95.0,
+        )
+        with pytest.raises(SystemExit):
+            _ = validate_args(args, parser)
 
     def test_accepts_multi_profile_search_alone(
         self, parser: argparse.ArgumentParser

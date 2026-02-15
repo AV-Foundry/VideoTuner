@@ -2,6 +2,7 @@
 
 import pytest
 
+from videotuner.encoder_type import EncoderType
 from videotuner.profiles import (
     Profile,
     ProfileError,
@@ -21,30 +22,35 @@ class TestProfileGroups:
                 name="Film",
                 description="Live action film",
                 settings={"preset": "slow"},
+                encoder=EncoderType.X265,
                 groups=["Default", "live-action"],
             ),
             "Grain": Profile(
                 name="Grain",
                 description="Grainy content",
                 settings={"preset": "slow"},
+                encoder=EncoderType.X265,
                 groups=["Default", "live-action"],
             ),
             "CGI": Profile(
                 name="CGI",
                 description="CGI movies",
                 settings={"preset": "slow"},
+                encoder=EncoderType.X265,
                 groups=["Default", "animation"],
             ),
             "Anime": Profile(
                 name="Anime",
                 description="Anime content",
                 settings={"preset": "slow"},
+                encoder=EncoderType.X265,
                 groups=["animation"],
             ),
             "Ungrouped": Profile(
                 name="Ungrouped",
                 description="No groups",
                 settings={"preset": "slow"},
+                encoder=EncoderType.X265,
                 groups=[],
             ),
         }
@@ -63,6 +69,7 @@ class TestProfileGroups:
                 name="Test",
                 description="Test",
                 settings={"preset": "slow"},
+                encoder=EncoderType.X265,
                 groups=[],
             )
         }
@@ -163,6 +170,7 @@ class TestProfileClass:
             name="Test",
             description="Test profile",
             settings={"preset": "slow"},
+            encoder=EncoderType.X265,
             groups=["group1", "group2"],
         )
 
@@ -174,6 +182,7 @@ class TestProfileClass:
             name="Test",
             description="Test profile",
             settings={"preset": "slow"},
+            encoder=EncoderType.X265,
         )
 
         assert profile.groups == []
@@ -184,6 +193,7 @@ class TestProfileClass:
             name="Test",
             description="Test profile",
             settings={"preset": "slow"},
+            encoder=EncoderType.X265,
             groups=None,
         )
 
@@ -195,6 +205,7 @@ class TestProfileClass:
             name="Test",
             description="Test profile",
             settings={"preset": "slow"},
+            encoder=EncoderType.X265,
         )
 
         assert profile.is_preset is False
@@ -207,6 +218,7 @@ class TestProfileClass:
             name="preset-slow",
             description="x265 slow preset",
             settings={"preset": "slow"},
+            encoder=EncoderType.X265,
             is_preset=True,
         )
 
@@ -220,8 +232,31 @@ class TestProfileClass:
             name="custom-slow",
             description="Custom preset",
             settings={"preset": "slow"},
+            encoder=EncoderType.X265,
             is_preset=True,
         )
 
         assert profile.display_label == "Preset"
         assert profile.display_name == "custom-slow"
+
+    def test_profile_encoder_x265(self):
+        """Test creating a profile with x265 encoder."""
+        profile = Profile(
+            name="Test",
+            description="Test profile",
+            settings={"preset": "slow"},
+            encoder=EncoderType.X265,
+        )
+
+        assert profile.encoder == EncoderType.X265
+
+    def test_profile_encoder_x264(self):
+        """Test creating a profile with x264 encoder."""
+        profile = Profile(
+            name="Test",
+            description="Test profile",
+            settings={"preset": "slow"},
+            encoder=EncoderType.X264,
+        )
+
+        assert profile.encoder == EncoderType.X264

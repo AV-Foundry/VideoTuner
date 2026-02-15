@@ -19,12 +19,16 @@ from rich.progress import (
 )
 
 from .constants import PROGRESS_BAR_WIDTH
+from .encoder_type import EncoderType
 from .tool_parsers import (
     FFMPEG_FRAME_RE,
     FFMSINDEX_PROGRESS_RE,
     MKVMERGE_PCT_RE,
     SSIM_LINE_RE,
     VSZIP_PROGRESS_RE,
+    X264_ENCODED_RE,
+    X264_FRAME_RE,
+    X264_PROGRESS_RE,
     X265_ENCODED_RE,
     X265_FRAME_RE,
     X265_PROGRESS_RE,
@@ -244,10 +248,25 @@ class Stage:
 
         return handler
 
-    def make_x265_handler(self, *, total_frames: int | None = None) -> LineHandler:
+    def make_encoder_handler(
+        self,
+        *,
+        total_frames: int | None = None,
+        encoder_type: EncoderType = EncoderType.X265,
+    ) -> LineHandler:
         if total_frames:
             self.set_total(total_frames)
         last_frame = 0
+
+        # Select regex patterns based on encoder type
+        if encoder_type == EncoderType.X264:
+            progress_re = X264_PROGRESS_RE
+            frame_re = X264_FRAME_RE
+            encoded_re = X264_ENCODED_RE
+        else:
+            progress_re = X265_PROGRESS_RE
+            frame_re = X265_FRAME_RE
+            encoded_re = X265_ENCODED_RE
 
         def handler(line: str) -> bool:
             nonlocal last_frame
@@ -255,7 +274,7 @@ class Stage:
             if not line:
                 return False
 
-            prog_match = X265_PROGRESS_RE.search(line)
+            prog_match = progress_re.search(line)
             if prog_match:
                 done = int(prog_match.group("done"))
                 total = int(prog_match.group("total"))
@@ -265,9 +284,9 @@ class Stage:
                 self.update(completed=done)
                 return True
 
-            match = X265_FRAME_RE.search(line)
+            match = frame_re.search(line)
             if not match:
-                match = X265_ENCODED_RE.search(line)
+                match = encoded_re.search(line)
             if not match:
                 return False
 

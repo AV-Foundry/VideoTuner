@@ -121,6 +121,26 @@ def run_pipeline(args: PipelineArgs) -> int:
         display.console, args, multi_profile_display, input_path.name
     )
 
+    # Validate HDR + x264 combination (x264 cannot carry HDR10 metadata)
+    if is_hdr_video(info.color_trc):
+        from .encoder_type import EncoderType as _EncoderType
+
+        x264_profiles: list[str] = []
+        if selected_profile and selected_profile.encoder == _EncoderType.X264:
+            x264_profiles.append(selected_profile.name)
+        for p in multi_profile_list:
+            if p.encoder == _EncoderType.X264:
+                x264_profiles.append(p.name)
+        if x264_profiles:
+            profiles_str = ", ".join(x264_profiles)
+            msg = (
+                f"HDR source detected but x264 encoder cannot carry HDR10 metadata. "
+                f"x264 profile(s): {profiles_str}. Use x265 for HDR content."
+            )
+            display.console.print(f"\n[bold red]Error:[/bold red] {msg}\n")
+            log.error(msg)
+            return 1
+
     # Warn about ignored arguments when using bitrate profiles
     bitrate_profile_names = [p.name for p in multi_profile_list if p.is_bitrate_mode]
     display_ignored_args_warnings(
@@ -214,9 +234,18 @@ def run_pipeline(args: PipelineArgs) -> int:
     if args.multi_profile_search:
         profile_str = multi_profile_display
 
+    # Determine encoder type for display
+    encoder_str = ""
+    if selected_profile:
+        encoder_str = selected_profile.encoder.value
+    elif multi_profile_list:
+        encoder_types = {p.encoder.value for p in multi_profile_list}
+        encoder_str = ", ".join(sorted(encoder_types))
+
     log.info("")
     log.info("Settings")
     log.info("  Mode: %s", mode_str)
+    log.info("  Encoder: %s", encoder_str)
     log.info("  Profile: %s", profile_str)
 
     # Build assessments string
@@ -431,11 +460,23 @@ def run_pipeline(args: PipelineArgs) -> int:
 
     log_section(log, "Reference Generation")
 
+    # Determine encoder type for lossless reference (matches selected encoder)
+    from .encoder_type import EncoderType
+
+    if selected_profile:
+        lossless_encoder = selected_profile.encoder
+    elif multi_profile_list:
+        # Use first profile's encoder for lossless reference
+        lossless_encoder = multi_profile_list[0].encoder
+    else:
+        lossless_encoder = EncoderType.X265
+
     # Create concatenated reference files for each metric
     lossless_profile = Profile(
         name="lossless",
         description="Lossless reference extraction",
         settings={"preset": "ultrafast"},
+        encoder=lossless_encoder,
     )
 
     vmaf_ref_path: Path | None = None

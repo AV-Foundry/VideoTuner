@@ -6,7 +6,7 @@ from __future__ import annotations
 # CRF Search Constants
 # =============================================================================
 
-# x265 CRF range (0 = lossless, 51 = worst quality)
+# x264/x265 CRF range (0 = lossless, 51 = worst quality)
 CRF_MIN: float = 0.0
 CRF_MAX: float = 51.0
 

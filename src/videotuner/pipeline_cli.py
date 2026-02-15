@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .constants import METRIC_DECIMALS
+from .encoder_type import EncoderType
 
 if TYPE_CHECKING:
     from .profiles import Profile
@@ -39,6 +40,7 @@ class PipelineArgs:
     ffprobe_bin: str = "ffprobe"
     mkvmerge_bin: str = "mkvmerge"
 
+    encoder: str | None = None  # "x264" or "x265"; required with --preset
     profile: str | None = None
     preset: str | None = None  # None means use default "slow"
     crf_start_value: float = DEFAULT_CRF_START_VALUE
@@ -139,6 +141,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     # -------------------------------------------------------------------------
     encoding_group = p.add_argument_group("Encoding Options")
     _ = encoding_group.add_argument(
+        "--encoder",
+        type=str,
+        choices=[e.value for e in EncoderType],
+        default=_get_default("encoder"),
+        help="Encoder to use: x264 or x265 (required with --preset)",
+    )
+    _ = encoding_group.add_argument(
         "--preset",
         type=str,
         default=_get_default("preset"),
@@ -154,14 +163,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "veryslow",
             "placebo",
         ],
-        help="x265 preset (mutually exclusive with --profile)",
+        help="Encoder preset (mutually exclusive with --profile)",
     )
     _ = encoding_group.add_argument(
         "--profile",
         type=str,
         metavar="NAME",
         default=_get_default("profile"),
-        help="Profile name from x265_profiles.yaml (mutually exclusive with --preset)",
+        help="Profile name from profiles.yaml (mutually exclusive with --preset)",
     )
     _ = encoding_group.add_argument(
         "--crf-start-value",
@@ -808,11 +817,16 @@ def _resolve_selected_profile(
             print(list_profiles(profiles))
             parser.error(str(e))
 
-    # Use preset-based profile (default mode)
+    # Use preset-based profile — --encoder is required
+    if args.encoder is None:
+        parser.error("--encoder is required when using --preset")
+    encoder_type = EncoderType(args.encoder)
+
     return Profile(
         name=f"preset-{args.preset}",
-        description=f"x265 {args.preset} preset",
+        description=f"{encoder_type.value} {args.preset} preset",
         settings={"preset": args.preset},
+        encoder=encoder_type,
         is_preset=True,
     )
 

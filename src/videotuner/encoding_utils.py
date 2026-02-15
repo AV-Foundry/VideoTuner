@@ -13,11 +13,20 @@ from io import TextIOWrapper
 from pathlib import Path
 from typing import IO, Callable
 
+from .encoder_type import EncoderType
+
 # Directory name for bundled VapourSynth portable installation
 VAPOURSYNTH_PORTABLE_DIR = "vapoursynth-portable"
 
-# Relative path to bundled x265 encoder binary
+# Relative paths to bundled encoder binaries
 X265_BIN_PATH = Path("tools") / "x265.exe"
+X264_BIN_PATH = Path("tools") / "x264.exe"
+
+# Map encoder types to their binary paths
+ENCODER_BIN_PATHS: dict[EncoderType, Path] = {
+    EncoderType.X265: X265_BIN_PATH,
+    EncoderType.X264: X264_BIN_PATH,
+}
 
 
 @dataclass(frozen=True)
@@ -54,18 +63,20 @@ def is_hdr_video(color_trc: str | None) -> bool:
     return color_trc.lower() in HDR_TRANSFER_CHARACTERISTICS
 
 
-def get_x265_bin(cwd: Path | None = None) -> Path:
-    """Get path to x265 binary.
+def get_encoder_bin(encoder_type: EncoderType, cwd: Path | None = None) -> Path:
+    """Get path to encoder binary.
 
     Args:
+        encoder_type: Which encoder to locate
         cwd: Working directory (if None, uses relative path)
 
     Returns:
-        Path to x265.exe binary
+        Path to encoder binary
     """
+    bin_path = ENCODER_BIN_PATHS[encoder_type]
     if cwd:
-        return Path(cwd) / X265_BIN_PATH
-    return X265_BIN_PATH
+        return Path(cwd) / bin_path
+    return bin_path
 
 
 def get_vapoursynth_portable_dir(cwd: Path | None = None) -> Path:
@@ -148,35 +159,39 @@ def write_vpy_script(vpy_path: Path, content: str) -> None:
 
 
 def create_temp_encode_paths(
+    encoder_type: EncoderType,
     temp_dir: Path | None = None,
     name: str = "encode",
 ) -> tuple[Path, Path]:
-    """Create temporary VPY and HEVC file paths.
+    """Create temporary VPY and bitstream file paths.
 
     Args:
+        encoder_type: Encoder type (determines bitstream file extension)
         temp_dir: Directory for temporary files (None for system temp)
         name: Base filename (without extension)
 
     Returns:
-        Tuple of (vpy_path, hevc_path)
+        Tuple of (vpy_path, bitstream_path)
     """
+    ext = encoder_type.bitstream_extension
+
     if temp_dir:
         from .utils import ensure_dir
 
         _ = ensure_dir(temp_dir)
         vpy_path = temp_dir / f"{name}.vpy"
-        hevc_path = temp_dir / f"{name}.hevc"
+        bitstream_path = temp_dir / f"{name}{ext}"
     else:
         with tempfile.NamedTemporaryFile(
             suffix=".vpy", prefix=f"{name}_", delete=False, mode="w", encoding="utf-8"
         ) as tmp:
             vpy_path = Path(tmp.name)
         with tempfile.NamedTemporaryFile(
-            suffix=".hevc", prefix=f"{name}_", delete=False
+            suffix=ext, prefix=f"{name}_", delete=False
         ) as tmp:
-            hevc_path = Path(tmp.name)
+            bitstream_path = Path(tmp.name)
 
-    return vpy_path, hevc_path
+    return vpy_path, bitstream_path
 
 
 @dataclass(frozen=True)
@@ -311,38 +326,46 @@ class VapourSynthEnv:
 
 @dataclass(frozen=True)
 class EncoderPaths:
-    """Resolved paths to all encoding tools (x265 + VapourSynth).
+    """Resolved paths to all encoding tools (encoder binary + VapourSynth).
 
     Usage:
-        paths = EncoderPaths.from_cwd(cwd)
+        paths = EncoderPaths.from_cwd(cwd, encoder_type)
         paths.validate()  # Raises FileNotFoundError if any tool missing
         env = paths.vs_env.build_env()
     """
 
-    x265_bin: Path
+    encoder_type: EncoderType
+    encoder_bin: Path
     vs_env: VapourSynthEnv
 
     @classmethod
-    def from_cwd(cls, cwd: Path | None) -> "EncoderPaths":
+    def from_cwd(cls, cwd: Path | None, encoder_type: EncoderType) -> "EncoderPaths":
         """Resolve all encoder paths from working directory.
 
         Args:
             cwd: Working directory. If None, uses relative paths.
+            encoder_type: Which encoder to resolve paths for.
 
         Returns:
-            EncoderPaths with x265 and VapourSynth paths resolved.
+            EncoderPaths with encoder binary and VapourSynth paths resolved.
         """
-        x265_bin = Path(cwd) / X265_BIN_PATH if cwd else X265_BIN_PATH
-        return cls(x265_bin=x265_bin, vs_env=VapourSynthEnv.from_cwd(cwd))
+        encoder_bin = get_encoder_bin(encoder_type, cwd)
+        return cls(
+            encoder_type=encoder_type,
+            encoder_bin=encoder_bin,
+            vs_env=VapourSynthEnv.from_cwd(cwd),
+        )
 
     def validate(self) -> None:
         """Validate that all required encoder files exist.
 
         Raises:
-            FileNotFoundError: If x265.exe, VSScript.dll, or ffms2.dll is missing.
+            FileNotFoundError: If encoder binary, VSScript.dll, or ffms2.dll is missing.
         """
-        if not self.x265_bin.exists():
-            raise FileNotFoundError(f"x265 encoder not found at: {self.x265_bin}")
+        if not self.encoder_bin.exists():
+            raise FileNotFoundError(
+                f"{self.encoder_type.value} encoder not found at: {self.encoder_bin}"
+            )
         self.vs_env.validate()
 
 
@@ -525,8 +548,8 @@ def build_sampling_vpy_script(
 
 def build_x265_command(
     paths: EncoderPaths,
-    hevc_path: Path,
-    x265_params: list[str],
+    output_path: Path,
+    encoder_params: list[str],
     preset: str | None,
     cwd: Path | None = None,
 ) -> list[str]:
@@ -534,26 +557,84 @@ def build_x265_command(
 
     Args:
         paths: Resolved encoder paths
-        hevc_path: Output HEVC path
-        x265_params: Additional x265 parameters
+        output_path: Output bitstream path
+        encoder_params: Additional x265 parameters
         preset: x265 preset (or None)
         cwd: Working directory for path resolution
 
     Returns:
         List of command arguments for x265
     """
-    abs_hevc_path = resolve_absolute_path(hevc_path, cwd)
+    abs_output_path = resolve_absolute_path(output_path, cwd)
 
-    x265_args = [str(paths.x265_bin)]
+    args = [str(paths.encoder_bin)]
 
     if preset is not None:
-        x265_args += ["--preset", preset]
+        args += ["--preset", preset]
 
-    x265_args += ["--output", str(abs_hevc_path)]
-    x265_args += x265_params
-    x265_args += ["--y4m", "--input", "-"]
+    args += ["--output", str(abs_output_path)]
+    args += encoder_params
+    args += ["--y4m", "--input", "-"]
 
-    return x265_args
+    return args
+
+
+def build_x264_command(
+    paths: EncoderPaths,
+    output_path: Path,
+    encoder_params: list[str],
+    preset: str | None,
+    cwd: Path | None = None,
+) -> list[str]:
+    """Build x264 command line arguments for piped y4m input.
+
+    Args:
+        paths: Resolved encoder paths
+        output_path: Output bitstream path
+        encoder_params: Additional x264 parameters
+        preset: x264 preset (or None)
+        cwd: Working directory for path resolution
+
+    Returns:
+        List of command arguments for x264
+    """
+    abs_output_path = resolve_absolute_path(output_path, cwd)
+
+    args = [str(paths.encoder_bin)]
+
+    if preset is not None:
+        args += ["--preset", preset]
+
+    args += encoder_params
+    args += ["--demuxer", "y4m", "--output", str(abs_output_path), "-"]
+
+    return args
+
+
+def build_encoder_command(
+    paths: EncoderPaths,
+    output_path: Path,
+    encoder_params: list[str],
+    preset: str | None,
+    cwd: Path | None = None,
+) -> list[str]:
+    """Build encoder command line arguments based on encoder type.
+
+    Dispatches to the appropriate command builder for x264 or x265.
+
+    Args:
+        paths: Resolved encoder paths (contains encoder_type)
+        output_path: Output bitstream path
+        encoder_params: Additional encoder parameters
+        preset: Encoder preset (or None)
+        cwd: Working directory for path resolution
+
+    Returns:
+        List of command arguments for the encoder
+    """
+    if paths.encoder_type == EncoderType.X264:
+        return build_x264_command(paths, output_path, encoder_params, preset, cwd)
+    return build_x265_command(paths, output_path, encoder_params, preset, cwd)
 
 
 def build_vspipe_command(
@@ -575,21 +656,21 @@ def build_vspipe_command(
     return [str(vs_env.vspipe_bin), "-c", "y4m", str(abs_vpy_path), "-"]
 
 
-def run_vspipe_x265_encode(
+def run_vspipe_encode(
     vspipe_args: list[str],
-    x265_args: list[str],
+    encoder_args: list[str],
     vs_env: dict[str, str],
     cwd: Path | None,
     line_handler: Callable[[str], bool] | None,
 ) -> str:
-    """Run vspipe | x265 encoding pipeline.
+    """Run vspipe | encoder encoding pipeline.
 
-    Pipes vspipe y4m output to x265 stdin, avoiding direct VapourSynth
+    Pipes vspipe y4m output to encoder stdin, avoiding direct VapourSynth
     readout which has thread-safety bugs in the x265 VPY reader.
 
     Args:
         vspipe_args: Command arguments for vspipe
-        x265_args: Command arguments for x265
+        encoder_args: Command arguments for encoder (x264 or x265)
         vs_env: Environment with VapourSynth paths
         cwd: Working directory
         line_handler: Optional callback for progress lines
@@ -604,7 +685,7 @@ def run_vspipe_x265_encode(
 
     log = logging.getLogger(__name__)
     log.info("vspipe cmd: %s", " ".join(shlex.quote(str(c)) for c in vspipe_args))
-    log.info("x265 cmd: %s", " ".join(shlex.quote(str(c)) for c in x265_args))
+    log.info("encoder cmd: %s", " ".join(shlex.quote(str(c)) for c in encoder_args))
 
     cwd_str = str(cwd) if cwd else None
     captured: list[str] = []
@@ -622,8 +703,8 @@ def run_vspipe_x265_encode(
         raise RuntimeError(f"Command not found: {vspipe_args[0]}") from e
 
     try:
-        x265_proc = subprocess.Popen(
-            x265_args,
+        encoder_proc = subprocess.Popen(
+            encoder_args,
             stdin=vspipe_proc.stdout,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -633,18 +714,18 @@ def run_vspipe_x265_encode(
     except FileNotFoundError as e:
         vspipe_proc.kill()
         _ = vspipe_proc.wait()
-        raise RuntimeError(f"Command not found: {x265_args[0]}") from e
+        raise RuntimeError(f"Command not found: {encoder_args[0]}") from e
 
-    # Close vspipe stdout in parent so x265 gets EOF when vspipe finishes
+    # Close vspipe stdout in parent so encoder gets EOF when vspipe finishes
     assert vspipe_proc.stdout is not None
     vspipe_proc.stdout.close()
 
-    # Read x265 stderr for progress and vspipe stderr for errors
-    assert x265_proc.stdout is not None
-    assert x265_proc.stderr is not None
+    # Read encoder stderr for progress and vspipe stderr for errors
+    assert encoder_proc.stdout is not None
+    assert encoder_proc.stderr is not None
     assert vspipe_proc.stderr is not None
 
-    def _read_x265_stream(stream: IO[bytes]) -> None:
+    def _read_encoder_stream(stream: IO[bytes]) -> None:
         wrapper = TextIOWrapper(stream, encoding="utf-8", errors="replace")
         try:
             for line in iter_stream_output(wrapper):
@@ -668,8 +749,8 @@ def run_vspipe_x265_encode(
             _ = wrapper.detach()
 
     threads = [
-        threading.Thread(target=_read_x265_stream, args=(x265_proc.stdout,)),
-        threading.Thread(target=_read_x265_stream, args=(x265_proc.stderr,)),
+        threading.Thread(target=_read_encoder_stream, args=(encoder_proc.stdout,)),
+        threading.Thread(target=_read_encoder_stream, args=(encoder_proc.stderr,)),
         threading.Thread(target=_read_vspipe_stderr, args=(vspipe_proc.stderr,)),
     ]
     for t in threads:
@@ -677,22 +758,22 @@ def run_vspipe_x265_encode(
     for t in threads:
         t.join()
 
-    x265_ret = x265_proc.wait()
+    encoder_ret = encoder_proc.wait()
     vspipe_ret = vspipe_proc.wait()
 
     if vspipe_ret != 0:
         error_detail = "\n".join(vspipe_errors) if vspipe_errors else ""
         raise RuntimeError(format_command_error(vspipe_ret, vspipe_args, error_detail))
-    if x265_ret != 0:
+    if encoder_ret != 0:
         raise RuntimeError(
-            format_command_error(x265_ret, x265_args, "\n".join(captured))
+            format_command_error(encoder_ret, encoder_args, "\n".join(captured))
         )
 
     return "\n".join(captured)
 
 
 def mux_and_cleanup(
-    hevc_path: Path,
+    bitstream_path: Path,
     output_path: Path,
     vpy_path: Path,
     perform_mux: bool,
@@ -701,10 +782,10 @@ def mux_and_cleanup(
     cwd: Path | None,
     mux_handler: Callable[[str], bool] | None,
 ) -> Path:
-    """Mux HEVC to MKV and cleanup temporary files.
+    """Mux bitstream to MKV and cleanup temporary files.
 
     Args:
-        hevc_path: Path to HEVC bitstream
+        bitstream_path: Path to raw bitstream (HEVC or H.264)
         output_path: Output MKV path
         vpy_path: VapourSynth script path to cleanup
         perform_mux: Whether to mux to MKV
@@ -714,15 +795,15 @@ def mux_and_cleanup(
         mux_handler: Optional callback for mux progress
 
     Returns:
-        Final output path (MKV if muxed, HEVC if not)
+        Final output path (MKV if muxed, bitstream if not)
     """
     log = logging.getLogger(__name__)
 
     try:
         if perform_mux:
-            log.info("Muxing HEVC -> MKV")
+            log.info("Muxing bitstream -> MKV")
             mux_fn(
-                hevc_path=hevc_path,
+                bitstream_path=bitstream_path,
                 output_path=output_path,
                 mkvmerge_bin=mkvmerge_bin,
                 cwd=cwd,
@@ -730,9 +811,9 @@ def mux_and_cleanup(
             )
             return output_path
         else:
-            return hevc_path
+            return bitstream_path
     finally:
-        if perform_mux and hevc_path.exists():
-            hevc_path.unlink()
+        if perform_mux and bitstream_path.exists():
+            bitstream_path.unlink()
         if vpy_path.exists():
             vpy_path.unlink()

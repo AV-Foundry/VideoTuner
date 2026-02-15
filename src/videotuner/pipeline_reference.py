@@ -114,7 +114,7 @@ def generate_metric_reference(
     Returns:
         Path to the generated reference MKV, or None if generation failed
     """
-    from .create_encodes import encode_x265_concatenated_reference, mux_hevc_to_mkv
+    from .create_encodes import encode_concatenated_reference, mux_to_mkv
 
     metric_label = (
         metric_type.title() if metric_type == "shared" else metric_type.upper()
@@ -122,9 +122,9 @@ def generate_metric_reference(
     ref_path = output_dir / f"{metric_type}_reference_concatenated.mkv"
     total_frames = sampling_params.total_sample_frames
 
-    hevc_path: Path | None = None
+    bitstream_path: Path | None = None
 
-    # Encode reference HEVC
+    # Encode reference bitstream
     with display.stage(
         f"Encoding {metric_label} reference",
         total=total_frames,
@@ -132,10 +132,13 @@ def generate_metric_reference(
         transient=True,
         show_done=True,
     ) as enc_stage:
-        enc_handler = enc_stage.make_x265_handler(total_frames=total_frames)
+        enc_handler = enc_stage.make_encoder_handler(
+            total_frames=total_frames,
+            encoder_type=lossless_profile.encoder,
+        )
 
         try:
-            hevc_path = encode_x265_concatenated_reference(
+            bitstream_path = encode_concatenated_reference(
                 source_path=source_path,
                 output_path=ref_path,
                 interval_frames=sampling_params.interval_frames,
@@ -157,19 +160,19 @@ def generate_metric_reference(
                 metric_label=metric_label,
             )
             log.info(
-                "%s concatenated reference HEVC created: %s",
+                "%s concatenated reference bitstream created: %s",
                 metric_label,
-                hevc_path.name,
+                bitstream_path.name,
             )
         except Exception as e:
             log.error("Failed to create %s reference: %s", metric_label, e)
-            _cleanup_hevc(hevc_path)
+            _cleanup_bitstream(bitstream_path)
             return None
 
-    # hevc_path is guaranteed to be Path here (exception would have returned None)
-    assert hevc_path is not None
+    # bitstream_path is guaranteed to be Path here (exception would have returned None)
+    assert bitstream_path is not None
 
-    # Mux HEVC to MKV
+    # Mux bitstream to MKV
     with display.stage(
         f"Muxing {metric_label} reference",
         total=100,
@@ -180,8 +183,8 @@ def generate_metric_reference(
         mux_handler = mux_stage.make_percent_handler()
 
         try:
-            mux_hevc_to_mkv(
-                hevc_path=hevc_path,
+            mux_to_mkv(
+                bitstream_path=bitstream_path,
                 output_path=ref_path,
                 mkvmerge_bin=mkvmerge_bin,
                 cwd=repo_root,
@@ -196,17 +199,17 @@ def generate_metric_reference(
             log.error("Failed to mux %s reference: %s", metric_label, e)
             return None
         finally:
-            _cleanup_hevc(hevc_path)
+            _cleanup_bitstream(bitstream_path)
 
     return ref_path
 
 
-def _cleanup_hevc(hevc_path: Path | None) -> None:
-    """Safely remove HEVC intermediate file."""
-    if hevc_path is not None and hevc_path.exists():
+def _cleanup_bitstream(bitstream_path: Path | None) -> None:
+    """Safely remove bitstream intermediate file."""
+    if bitstream_path is not None and bitstream_path.exists():
         try:
-            hevc_path.unlink()
+            bitstream_path.unlink()
         except OSError as e:
             logging.getLogger(__name__).debug(
-                "Failed to delete temporary HEVC file %s: %s", hevc_path, e
+                "Failed to delete temporary bitstream file %s: %s", bitstream_path, e
             )

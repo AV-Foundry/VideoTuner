@@ -93,7 +93,7 @@ dmypy.json
 # Project-specific
 jobs/
 *.lwi
-x265_profiles.yaml
+profiles.yaml
 
 # Claude Code
 CLAUDE.md

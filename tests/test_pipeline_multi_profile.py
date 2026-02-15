@@ -8,6 +8,7 @@ from videotuner.pipeline_multi_profile import (
     rank_profile_results,
 )
 from videotuner.pipeline_types import MultiProfileResult
+from videotuner.encoder_type import EncoderType
 from videotuner.profiles import Profile
 
 
@@ -16,7 +17,14 @@ class TestMultiProfileSearchParams:
 
     def test_creation_with_all_fields(self):
         """Test that MultiProfileSearchParams can be created with all fields."""
-        profiles = [Profile(name="test", description="Test profile", settings={})]
+        profiles = [
+            Profile(
+                name="test",
+                description="Test profile",
+                settings={},
+                encoder=EncoderType.X265,
+            )
+        ]
         targets = [QualityTarget(metric_name="vmaf_mean", target_value=90.0)]
         args = MagicMock()
         display = MagicMock()

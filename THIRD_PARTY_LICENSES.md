@@ -6,6 +6,7 @@ VideoTuner bundles the following third-party software components. This document 
 
 | Component | License | Source |
 | --------- | ------- | ------ |
+| x264 Patman's Mod | GPL-2.0-or-later | <https://github.com/Patman86/x264-Mod-by-Patman> |
 | x265 Patman's Mod | GPL-2.0-or-later | <https://github.com/Patman86/x265-Mod-by-Patman> |
 | VapourSynth | LGPL-2.1-or-later | <https://github.com/vapoursynth/vapoursynth> |
 | vapoursynth-zip | MIT | <https://github.com/dnjulek/vapoursynth-zip> |
@@ -18,6 +19,18 @@ VideoTuner bundles the following third-party software components. This document 
 ## Source Code Availability
 
 For GPL and LGPL licensed components, source code is available at the URLs listed above. You may also request source code by contacting the VideoTuner maintainers.
+
+---
+
+## x264 Patman's Mod
+
+**Location:** `tools/x264.exe`\
+**License:** GNU General Public License v2.0 or later\
+**Copyright:** Copyright (C) 2003-2024 x264 project contributors
+
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
+
+Full license text: [licenses/GPL-2.0.txt](licenses/GPL-2.0.txt)
 
 ---
 

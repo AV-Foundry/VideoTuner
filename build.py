@@ -22,6 +22,10 @@ RELEASE_NAME = f"VideoTuner-v{__version__}"
 RELEASE_DIR = DIST_DIR / RELEASE_NAME
 
 # External dependency URLs and versions
+# x264 encoder
+X264_VERSION = "0.165.3223+25"
+X264_URL = "https://github.com/Patman86/x264-Mod-by-Patman/releases/download/0.165.3223%2B25/x264-0.165.3223+25-2d47345-.Mod-by-Patman.-x64-gcc15.2.0.7z"
+
 # x265 encoder
 X265_VERSION = "4.1+223+43"
 X265_URL = "https://github.com/Patman86/x265-Mod-by-Patman/releases/download/4.1%2B223%2B43/x265-4.1+223+43-5b546048f-.Mod-by-Patman.-x64-avx2-clang2118.7z"
@@ -45,6 +49,7 @@ VSZIP_DLL = "vszip.dll"
 # To update: download file, run: python -c "import hashlib; print(hashlib.sha256(open('file','rb').read()).hexdigest())"
 CHECKSUMS = {
     "vapoursynth_installer": "5f984e341c2264244b6549e71dd842af74a17274b6bfd494bc25e6c0e2f37439",
+    "x264": "54ace621150589b70029424cfa6b6bc70b60b958367ab85ec543571380b53ac6",
     "x265": "e36b5c50c779e5625368674a5baba0aec7cd2baaa08155149a4e73033b649070",
     "ffms2": "e867a3df7262865107df40f230f5b8e1455905eba9b8852e6f35b1227537caeb",
     "lsmash": "7189f299730c82e2cef025082095628c1028effb7e7276eae5fb5c9c3f1aef00",
@@ -341,6 +346,36 @@ def download_lsmashsource(plugin_dir: Path, sevenzip_exe: Path) -> None:
         print(f"  Extracted LSMASHSource.dll to {plugin_dir}")
 
 
+def download_x264(tools_dir: Path, sevenzip_exe: Path) -> None:
+    """Download and extract x264 encoder."""
+    dest_exe = tools_dir / "x264.exe"
+    if dest_exe.exists():
+        print("  x264.exe already exists, skipping download")
+        return
+
+    print(f"Downloading x264 {X264_VERSION}...")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        archive_path = Path(tmpdir) / "x264.7z"
+
+        try:
+            _ = urllib.request.urlretrieve(X264_URL, archive_path)
+        except Exception as e:
+            print(f"ERROR: Failed to download x264: {e}")
+            sys.exit(1)
+
+        verify_checksum(archive_path, CHECKSUMS["x264"], "x264")
+
+        # Extract x264.exe from archive root
+        extract_from_7z(
+            archive_path,
+            ["x264.exe"],
+            tools_dir,
+            sevenzip_exe,
+        )
+        print(f"  Extracted x264.exe to {tools_dir}")
+
+
 def download_x265(tools_dir: Path, sevenzip_exe: Path) -> None:
     """Download and extract x265 encoder."""
     dest_exe = tools_dir / "x265.exe"
@@ -438,9 +473,10 @@ def assemble_release(exe_path: Path) -> None:
     install_vapoursynth_portable(vs_dst)
     sevenzip_exe = vs_dst / "7z.exe"
 
-    # Download x265 encoder to tools folder
+    # Download encoders to tools folder
     tools_dst = RELEASE_DIR / "tools"
     tools_dst.mkdir(parents=True, exist_ok=True)
+    download_x264(tools_dst, sevenzip_exe)
     download_x265(tools_dst, sevenzip_exe)
 
     # Download plugins to the plugin directory
@@ -451,9 +487,9 @@ def assemble_release(exe_path: Path) -> None:
     download_vszip(plugin_dir)
 
     # Copy sample profile config
-    sample_config = REPO_ROOT / "x265_profiles.yaml.sample"
+    sample_config = REPO_ROOT / "profiles.yaml.sample"
     if sample_config.exists():
-        _ = shutil.copy2(sample_config, RELEASE_DIR / "x265_profiles.yaml.sample")
+        _ = shutil.copy2(sample_config, RELEASE_DIR / "profiles.yaml.sample")
 
     # Copy README
     readme = REPO_ROOT / "README.md"

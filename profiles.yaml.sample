@@ -1,5 +1,7 @@
 profiles:
+  # x265 (HEVC) profile example
   - name: "Film - Transparent"
+    encoder: x265
     description: "Live action film"
     settings:
       preset: "slow"
@@ -24,3 +26,19 @@ profiles:
       aq-mode:
         hdr: 4
         sdr: 5
+
+  # x264 (H.264) profile example
+  - name: "Film - x264 Quality"
+    encoder: x264
+    description: "Live action film targeting H.264 delivery"
+    settings:
+      preset: "slow"
+      deblock: "-3:-3"
+      no-dct-decimate: true
+      aq-strength: 0.85
+      psy-rd: "1.00:0.15"
+      bframes: 8
+      ref: 6
+      rc-lookahead: 80
+      vbv-maxrate: 62500
+      vbv-bufsize: 62500

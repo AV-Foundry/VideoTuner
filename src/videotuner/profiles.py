@@ -1,6 +1,7 @@
-"""Profile management for x265 encoding settings.
+"""Profile management for encoding settings.
 
-This module handles loading and parsing x265 encoding profiles from YAML configuration.
+This module handles loading and parsing encoding profiles from YAML configuration.
+Supports both x264 and x265 encoders.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from typing import TYPE_CHECKING, cast
 
 import yaml
 
+from .encoder_type import EncoderType
 from .utils import get_app_root
 
 if TYPE_CHECKING:
@@ -26,13 +28,14 @@ class ProfileError(Exception):
 
 
 class Profile:
-    """Represents an x265 encoding profile."""
+    """Represents an encoding profile for x264 or x265."""
 
     def __init__(
         self,
         name: str,
         description: str,
         settings: dict[str, object],
+        encoder: EncoderType,
         groups: list[str] | None = None,
         is_preset: bool = False,
     ) -> None:
@@ -41,13 +44,15 @@ class Profile:
         Args:
             name: Profile name
             description: Profile description
-            settings: Dictionary of x265 settings
+            settings: Dictionary of encoder settings
+            encoder: Encoder type (x264 or x265)
             groups: List of group names this profile belongs to (optional)
             is_preset: True if this is a preset-based profile (not from YAML)
         """
         self.name: str = name
         self.description: str = description
         self.settings: dict[str, object] = settings
+        self.encoder: EncoderType = encoder
         self.groups: list[str] = groups if groups is not None else []
         self.is_preset: bool = is_preset
 
@@ -67,25 +72,33 @@ class Profile:
         from .encoder_params import VALID_PRESETS
 
         # Check for inverse boolean syntax (error - suggest fix)
-        # Common x265 boolean parameters that users might try to set to false
-        boolean_params = {
+        # Common boolean parameters that users might try to set to false.
+        # x265 has additional HEVC-specific boolean params.
+        boolean_params: dict[str, str] = {
             "open-gop": "no-open-gop",
-            "strong-intra-smoothing": "no-strong-intra-smoothing",
             "cutree": "no-cutree",
             "b-adapt": "no-b-adapt",
             "b-pyramid": "no-b-pyramid",
             "weightp": "no-weightp",
             "weightb": "no-weightb",
-            "rect": "no-rect",
-            "amp": "no-amp",
-            "early-skip": "no-early-skip",
-            "fast-intra": "no-fast-intra",
             "deblock": "no-deblock",
-            "sao": "no-sao",
-            "signhide": "no-signhide",
-            "tskip": "no-tskip",
-            "tskip-fast": "no-tskip-fast",
+            "fast-intra": "no-fast-intra",
         }
+
+        # x265-only boolean params
+        if self.encoder == EncoderType.X265:
+            boolean_params.update(
+                {
+                    "strong-intra-smoothing": "no-strong-intra-smoothing",
+                    "rect": "no-rect",
+                    "amp": "no-amp",
+                    "early-skip": "no-early-skip",
+                    "sao": "no-sao",
+                    "signhide": "no-signhide",
+                    "tskip": "no-tskip",
+                    "tskip-fast": "no-tskip-fast",
+                }
+            )
 
         for positive_param, negative_param in boolean_params.items():
             if positive_param in self.settings:
@@ -95,7 +108,7 @@ class Profile:
                         f"Profile '{self.name}': Invalid boolean syntax: '{positive_param}: false' should be '{negative_param}: true'"
                     )
 
-        # Validate preset parameter
+        # Validate preset parameter (same presets for both x264 and x265)
         if "preset" in self.settings:
             preset_value = str(self.settings["preset"])
             if preset_value not in VALID_PRESETS:
@@ -144,33 +157,43 @@ class Profile:
                     f"Profile '{self.name}': 'pass' requires 'bitrate' to be specified"
                 )
 
-        # Validate multi-pass optimization parameters
+        # Validate multi-pass optimization parameters (x265-only)
         opt_analysis = self.settings.get("multi-pass-opt-analysis")
         opt_distortion = self.settings.get("multi-pass-opt-distortion")
 
-        if opt_analysis is not None:
-            if not isinstance(opt_analysis, bool):
+        if self.encoder == EncoderType.X264:
+            if opt_analysis is not None:
                 raise ProfileError(
-                    f"Profile '{self.name}': 'multi-pass-opt-analysis' must be a boolean, got {type(opt_analysis).__name__}"
+                    f"Profile '{self.name}': 'multi-pass-opt-analysis' is only supported by x265"
                 )
-            # Require multi-pass encoding (any pass value 1, 2, or 3)
-            pass_value = self.settings.get("pass")
-            if opt_analysis and pass_value is None:
+            if opt_distortion is not None:
                 raise ProfileError(
-                    f"Profile '{self.name}': 'multi-pass-opt-analysis' requires multi-pass encoding (pass: 1, 2, or 3)"
+                    f"Profile '{self.name}': 'multi-pass-opt-distortion' is only supported by x265"
                 )
+        else:
+            if opt_analysis is not None:
+                if not isinstance(opt_analysis, bool):
+                    raise ProfileError(
+                        f"Profile '{self.name}': 'multi-pass-opt-analysis' must be a boolean, got {type(opt_analysis).__name__}"
+                    )
+                # Require multi-pass encoding (any pass value 1, 2, or 3)
+                pass_value = self.settings.get("pass")
+                if opt_analysis and pass_value is None:
+                    raise ProfileError(
+                        f"Profile '{self.name}': 'multi-pass-opt-analysis' requires multi-pass encoding (pass: 1, 2, or 3)"
+                    )
 
-        if opt_distortion is not None:
-            if not isinstance(opt_distortion, bool):
-                raise ProfileError(
-                    f"Profile '{self.name}': 'multi-pass-opt-distortion' must be a boolean, got {type(opt_distortion).__name__}"
-                )
-            # Require multi-pass encoding (any pass value 1, 2, or 3)
-            pass_value = self.settings.get("pass")
-            if opt_distortion and pass_value is None:
-                raise ProfileError(
-                    f"Profile '{self.name}': 'multi-pass-opt-distortion' requires multi-pass encoding (pass: 1, 2, or 3)"
-                )
+            if opt_distortion is not None:
+                if not isinstance(opt_distortion, bool):
+                    raise ProfileError(
+                        f"Profile '{self.name}': 'multi-pass-opt-distortion' must be a boolean, got {type(opt_distortion).__name__}"
+                    )
+                # Require multi-pass encoding (any pass value 1, 2, or 3)
+                pass_value = self.settings.get("pass")
+                if opt_distortion and pass_value is None:
+                    raise ProfileError(
+                        f"Profile '{self.name}': 'multi-pass-opt-distortion' requires multi-pass encoding (pass: 1, 2, or 3)"
+                    )
 
         # Note: VBV parameters (vbv-maxrate/vbv-bufsize) can be used with both bitrate
         # and CRF modes. In CRF mode, VBV will constrain the encode to meet the buffer
@@ -178,7 +201,7 @@ class Profile:
 
     @property
     def preset(self) -> str | None:
-        """Get the x265 preset for this profile, or None if not specified."""
+        """Get the encoder preset for this profile, or None if not specified."""
         if "preset" not in self.settings:
             return None
         return str(self.settings["preset"])
@@ -374,6 +397,149 @@ class Profile:
 
         return params
 
+    def _to_x264_params(
+        self,
+        crf: float,
+        video_format: "VideoFormat",
+        video_info: "VideoInfo",
+        is_lossless: bool = False,
+        stats_file: Path | None = None,
+    ) -> list[str]:
+        """Convert profile settings to x264 command line parameters.
+
+        Args:
+            crf: The CRF value to use (ignored if is_lossless=True or bitrate mode)
+            video_format: The target video format
+            video_info: Video metadata for color space detection
+            is_lossless: If True, uses --qp 0 for lossless encoding
+            stats_file: Path to stats file for multi-pass bitrate encoding
+
+        Returns:
+            List of x264 CLI arguments
+        """
+        from .media import VideoFormat
+        from .x264_params import GLOBAL_X264_PARAMS, build_global_x264_params
+
+        # Determine which global params the profile overrides
+        skip_params = set(self.settings.keys()) & GLOBAL_X264_PARAMS
+
+        # 1. Get global parameters from centralized builder
+        chroma_location = None
+        if video_info and video_info.chroma_location is not None:
+            chroma_location = video_info.chroma_location
+
+        params = build_global_x264_params(
+            video_info=video_info,
+            is_lossless=is_lossless,
+            chroma_location=chroma_location,
+            skip_params=skip_params,
+        )
+
+        # 2. Add user-configurable parameters from profile settings
+        is_hdr = video_format != VideoFormat.SDR
+
+        logger.debug(
+            "Building x264 params: video_format=%s, is_hdr=%s", video_format, is_hdr
+        )
+
+        for key, value in self.settings.items():
+            # Skip preset (handled separately in command building)
+            if key == "preset":
+                continue
+
+            # Skip bitrate and pass params (handled in rate control section)
+            if key in ("bitrate", "pass"):
+                continue
+
+            # Handle conditional parameters (dict with 'hdr' and 'sdr' keys)
+            if isinstance(value, dict):
+                if "hdr" in value and "sdr" in value:
+                    conditional_value = cast(
+                        str | int | float | bool | None,
+                        value["hdr"] if is_hdr else value["sdr"],
+                    )
+                    logger.debug(
+                        f"Conditional param '{key}': is_hdr={is_hdr}, using value={conditional_value}"
+                    )
+                    if isinstance(conditional_value, bool):
+                        if conditional_value:
+                            params.append(f"--{key}")
+                    elif conditional_value is not None:
+                        params.extend([f"--{key}", str(conditional_value)])
+                else:
+                    logger.warning(
+                        "Skipping parameter '%s': unrecognized dict structure (expected 'hdr' and 'sdr' keys)",
+                        key,
+                    )
+                continue
+
+            # Handle universal parameters (simple values)
+            if isinstance(value, bool):
+                if value:
+                    params.append(f"--{key}")
+            elif value is not None:
+                params.extend([f"--{key}", str(value)])
+
+        # 3. Add rate control parameters (lossless, bitrate, or CRF)
+        if is_lossless:
+            # Lossless already handled via build_global_x264_params (--qp 0)
+            pass
+        elif self.is_bitrate_mode:
+            # Bitrate mode
+            bitrate_kbps = self.bitrate
+            if bitrate_kbps is not None:
+                params.extend(["--bitrate", str(bitrate_kbps)])
+
+            pass_num = self.pass_number
+            if pass_num is not None and (pass_num in (2, 3) or stats_file is not None):
+                params.extend(["--pass", str(pass_num)])
+
+                if pass_num in (2, 3):
+                    if stats_file is None:
+                        raise ProfileError(
+                            f"Profile '{self.name}': pass {pass_num} requires stats_file parameter"
+                        )
+                    params.extend(["--stats", str(stats_file)])
+                elif pass_num == 1 and stats_file is not None:
+                    params.extend(["--stats", str(stats_file)])
+        else:
+            # CRF mode (default)
+            params.extend(["--crf", str(crf)])
+
+        return params
+
+    def to_encoder_params(
+        self,
+        crf: float,
+        video_format: "VideoFormat",
+        video_info: "VideoInfo",
+        is_lossless: bool = False,
+        stats_file: Path | None = None,
+        analysis_file: Path | None = None,
+    ) -> list[str]:
+        """Convert profile settings to encoder-specific command line parameters.
+
+        Dispatches to the appropriate parameter builder based on encoder type.
+
+        Args:
+            crf: The CRF value to use (ignored if is_lossless=True or bitrate mode)
+            video_format: The target video format
+            video_info: Video metadata
+            is_lossless: If True, uses lossless encoding mode
+            stats_file: Path to stats file for multi-pass bitrate encoding
+            analysis_file: Path to analysis file for x265 multi-pass optimization
+
+        Returns:
+            List of encoder CLI arguments
+        """
+        if self.encoder == EncoderType.X264:
+            return self._to_x264_params(
+                crf, video_format, video_info, is_lossless, stats_file
+            )
+        return self.to_x265_params(
+            crf, video_format, video_info, is_lossless, stats_file, analysis_file
+        )
+
 
 # Keys to exclude from Pass 1 settings (they only apply to later passes)
 _PASS1_EXCLUDED_KEYS = frozenset(
@@ -417,6 +583,7 @@ def create_multipass_profile(base_profile: "Profile", pass_num: int) -> "Profile
         name=f"{base_profile.name}_pass{pass_num}",
         description=f"Pass {pass_num} for {base_profile.name}",
         settings=settings,
+        encoder=base_profile.encoder,
         groups=base_profile.groups,
     )
 
@@ -425,7 +592,7 @@ def load_profiles(profile_file: Path | None = None) -> dict[str, Profile]:
     """Load profiles from YAML configuration file.
 
     Args:
-        profile_file: Path to profiles YAML file. If None, searches for x265_profiles.yaml
+        profile_file: Path to profiles YAML file. If None, searches for profiles.yaml
                      in the current working directory and project root.
 
     Returns:
@@ -435,9 +602,9 @@ def load_profiles(profile_file: Path | None = None) -> dict[str, Profile]:
         ProfileError: If the profile file is missing, malformed, contains invalid data,
                      or if multiple profile files are found in different locations
     """
-    # Default to x265_profiles.yaml - check multiple locations
+    # Default to profiles.yaml - check multiple locations
     if profile_file is None:
-        config_filename = "x265_profiles.yaml"
+        config_filename = "profiles.yaml"
         candidates: list[Path] = []
 
         # Check current working directory
@@ -462,7 +629,7 @@ def load_profiles(profile_file: Path | None = None) -> dict[str, Profile]:
         else:
             raise ProfileError(
                 f"Profile file not found. Searched:\n  - {cwd_path}\n  - {project_path}\n"
-                + "Please create an x265_profiles.yaml file or specify --profile-file."
+                + "Please create a profiles.yaml file or specify --profile-file."
             )
 
     # Check if explicitly specified file exists
@@ -509,6 +676,21 @@ def load_profiles(profile_file: Path | None = None) -> dict[str, Profile]:
             raise ProfileError(f"Profile '{name}' settings must be a dictionary")
         settings: dict[str, object] = cast(dict[str, object], settings_val)
 
+        # Parse required encoder field
+        encoder_val = profile_dict.get("encoder")
+        if not isinstance(encoder_val, str) or not encoder_val:
+            raise ProfileError(
+                f"Profile '{name}' is missing required 'encoder' field. "
+                + "Set 'encoder: x265' or 'encoder: x264'."
+            )
+        try:
+            encoder = EncoderType(encoder_val)
+        except ValueError:
+            raise ProfileError(
+                f"Profile '{name}': Invalid encoder '{encoder_val}'. "
+                + f"Valid encoders: {', '.join(e.value for e in EncoderType)}"
+            )
+
         groups_val = profile_dict.get("groups", [])
         if not isinstance(groups_val, list):
             raise ProfileError(f"Profile '{name}' groups must be a list")
@@ -523,11 +705,14 @@ def load_profiles(profile_file: Path | None = None) -> dict[str, Profile]:
         if name in profiles:
             raise ProfileError(f"Duplicate profile name '{name}' found")
 
-        # Validate groups are strings
         # Create profile
         try:
             profile = Profile(
-                name=name, description=description, settings=settings, groups=groups
+                name=name,
+                description=description,
+                settings=settings,
+                encoder=encoder,
+                groups=groups,
             )
             profiles[name] = profile
         except ProfileError as e:
@@ -551,10 +736,10 @@ def list_profiles(profiles: dict[str, Profile]) -> str:
     Returns:
         Formatted string listing all profiles with descriptions
     """
-    lines = ["Available x265 encoding profiles:", ""]
+    lines = ["Available encoding profiles:", ""]
 
     for name, profile in profiles.items():
-        lines.append(f"  {name}")
+        lines.append(f"  {name} [{profile.encoder.value}]")
         if profile.description:
             lines.append(f"    {profile.description}")
         lines.append("")
