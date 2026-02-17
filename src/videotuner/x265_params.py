@@ -2,7 +2,7 @@
 Centralized x265 encoder parameter building and validation.
 
 This module provides a single source of truth for format-specific x265 parameters
-that are auto-detected from source video and should not be specified in user profiles.
+that are auto-detected from source video but can be overridden in user profiles.
 """
 
 from __future__ import annotations

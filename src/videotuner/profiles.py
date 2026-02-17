@@ -69,7 +69,7 @@ class Profile:
         Raises:
             ProfileError: If validation fails
         """
-        from .encoder_params import VALID_PRESETS
+        from .x265_params import VALID_PRESETS
 
         # Check for inverse boolean syntax (error - suggest fix)
         # Common boolean parameters that users might try to set to false.
@@ -279,7 +279,7 @@ class Profile:
         Returns:
             List of x265 CLI arguments (e.g., ["--preset", "slow", "--aud", "--crf", "16"])
         """
-        from .encoder_params import GLOBAL_X265_PARAMS, build_global_x265_params
+        from .x265_params import GLOBAL_X265_PARAMS, build_global_x265_params
         from .media import VideoFormat
 
         # Determine which global params the profile overrides

@@ -162,7 +162,7 @@ The codebase follows a pipeline architecture in `src/videotuner/`:
 | `pipeline_*.py` | Pipeline modules (CLI, iteration, validation, etc.) |
 | `crf_search.py` | Interpolated binary search for optimal CRF |
 | `profiles.py` | YAML-based profile loading and validation |
-| `encoder_params.py` | x265 parameter building with auto-detection |
+| `x265_params.py` | x265 parameter building with auto-detection |
 | `media.py` | Video metadata extraction |
 | `create_encodes.py` | VapourSynth script generation and encoding |
 | `vmaf_assessment.py` | VMAF quality assessment |

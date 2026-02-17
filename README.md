@@ -712,7 +712,7 @@ The pipeline is organized into modules:
 
 - `profiles.py` - Profile loading, validation, and group management from YAML config
 - `encoder_type.py` - `EncoderType` enum for x264/x265 dispatch
-- `encoder_params.py` - x265 parameter building, validation, and auto-detection of color/HDR metadata
+- `x265_params.py` - x265 parameter building, validation, and auto-detection of color/HDR metadata
 - `x264_params.py` - x264 parameter building (no HDR metadata, 10-bit max)
 - `create_encodes.py` - VapourSynth script generation, encoder-agnostic encoding (CRF and multi-pass bitrate modes)
 - `encoding_utils.py` - Shared encoding utilities (HDR detection, VapourSynthPaths/EncoderPaths dataclasses, path resolution)
