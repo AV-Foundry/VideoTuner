@@ -38,6 +38,7 @@ from .media import parse_video_info, InvalidVideoFileError, get_frame_count
 from .profiles import Profile
 from .utils import ensure_dir
 from .crf_search import (
+    CRFFloorError,
     CRFSearchState,
     QualityTarget,
 )
@@ -811,7 +812,12 @@ def run_pipeline(args: PipelineArgs) -> int:
                 break
 
             # Calculate next CRF
-            next_crf = crf_search_state.calculate_next_crf(current_crf)
+            try:
+                next_crf = crf_search_state.calculate_next_crf(current_crf)
+            except CRFFloorError as e:
+                display.console.print(f"[bold red]CRF floor reached: {e}[/bold red]")
+                log.warning("CRF floor reached: %s", e)
+                return 1
 
             if next_crf is None:
                 if crf_search_state.all_targets_met():
