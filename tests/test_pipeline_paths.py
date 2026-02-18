@@ -15,6 +15,7 @@ from videotuner.pipeline_types import (
     get_ssim2_dir,
     get_vmaf_dir,
 )
+from videotuner.encoder_type import EncoderType
 from videotuner.profiles import Profile
 
 
@@ -60,7 +61,12 @@ class TestGetDistortedDir:
         """Test creates distorted directory with profile name."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="TestProfile", description="Test", settings={})
+            profile = Profile(
+                name="TestProfile",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             dist_dir = get_distorted_dir(workdir, profile)
 
@@ -72,7 +78,12 @@ class TestGetDistortedDir:
         """Test replaces spaces in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Film High Quality", description="Test", settings={})
+            profile = Profile(
+                name="Film High Quality",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             dist_dir = get_distorted_dir(workdir, profile)
 
@@ -83,7 +94,12 @@ class TestGetDistortedDir:
         """Test replaces forward slashes in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Film/Animation", description="Test", settings={})
+            profile = Profile(
+                name="Film/Animation",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             dist_dir = get_distorted_dir(workdir, profile)
 
@@ -94,7 +110,12 @@ class TestGetDistortedDir:
         """Test replaces backslashes in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Film\\Animation", description="Test", settings={})
+            profile = Profile(
+                name="Film\\Animation",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             dist_dir = get_distorted_dir(workdir, profile)
 
@@ -106,7 +127,12 @@ class TestGetDistortedDir:
         """Test returns existing distorted directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="TestProfile", description="Test", settings={})
+            profile = Profile(
+                name="TestProfile",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
             expected_dir = workdir / "distorted" / "profile_TestProfile"
             expected_dir.mkdir(parents=True, exist_ok=True)
 
@@ -123,7 +149,12 @@ class TestGetVmafDir:
         """Test creates VMAF directory with profile name."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="TestProfile", description="Test", settings={})
+            profile = Profile(
+                name="TestProfile",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             vmaf_dir = get_vmaf_dir(workdir, profile)
 
@@ -135,7 +166,12 @@ class TestGetVmafDir:
         """Test replaces spaces in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Film High Quality", description="Test", settings={})
+            profile = Profile(
+                name="Film High Quality",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             vmaf_dir = get_vmaf_dir(workdir, profile)
 
@@ -146,7 +182,12 @@ class TestGetVmafDir:
         """Test replaces forward slashes in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Film/Animation", description="Test", settings={})
+            profile = Profile(
+                name="Film/Animation",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             vmaf_dir = get_vmaf_dir(workdir, profile)
 
@@ -157,7 +198,12 @@ class TestGetVmafDir:
         """Test replaces backslashes in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Test\\Profile", description="Test", settings={})
+            profile = Profile(
+                name="Test\\Profile",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             vmaf_dir = get_vmaf_dir(workdir, profile)
 
@@ -168,7 +214,12 @@ class TestGetVmafDir:
         """Test returns existing VMAF directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="TestProfile", description="Test", settings={})
+            profile = Profile(
+                name="TestProfile",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
             expected_dir = workdir / "vmaf" / "TestProfile_profile"
             expected_dir.mkdir(parents=True, exist_ok=True)
 
@@ -185,7 +236,12 @@ class TestGetSsim2Dir:
         """Test creates SSIMULACRA2 directory with profile name."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="TestProfile", description="Test", settings={})
+            profile = Profile(
+                name="TestProfile",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             ssim2_dir = get_ssim2_dir(workdir, profile)
 
@@ -197,7 +253,12 @@ class TestGetSsim2Dir:
         """Test replaces spaces in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Animation Ultra", description="Test", settings={})
+            profile = Profile(
+                name="Animation Ultra",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             ssim2_dir = get_ssim2_dir(workdir, profile)
 
@@ -208,7 +269,12 @@ class TestGetSsim2Dir:
         """Test replaces forward slashes in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="CGI/Anime", description="Test", settings={})
+            profile = Profile(
+                name="CGI/Anime",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             ssim2_dir = get_ssim2_dir(workdir, profile)
 
@@ -219,7 +285,12 @@ class TestGetSsim2Dir:
         """Test replaces backslashes in profile name with underscores."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Test\\Profile", description="Test", settings={})
+            profile = Profile(
+                name="Test\\Profile",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             ssim2_dir = get_ssim2_dir(workdir, profile)
 
@@ -230,7 +301,12 @@ class TestGetSsim2Dir:
         """Test returns existing SSIMULACRA2 directory."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="TestProfile", description="Test", settings={})
+            profile = Profile(
+                name="TestProfile",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
             expected_dir = workdir / "ssimulacra2" / "TestProfile_profile"
             expected_dir.mkdir(parents=True, exist_ok=True)
 
@@ -247,7 +323,9 @@ class TestPathConsistency:
         """Test all functions create their directories."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Test", description="Test", settings={})
+            profile = Profile(
+                name="Test", description="Test", settings={}, encoder=EncoderType.X265
+            )
 
             ref_dir = get_reference_dir(workdir)
             dist_dir = get_distorted_dir(workdir, profile)
@@ -263,7 +341,12 @@ class TestPathConsistency:
         """Test all functions handle the same profile consistently."""
         with tempfile.TemporaryDirectory() as tmpdir:
             workdir = Path(tmpdir)
-            profile = Profile(name="Film/High Quality", description="Test", settings={})
+            profile = Profile(
+                name="Film/High Quality",
+                description="Test",
+                settings={},
+                encoder=EncoderType.X265,
+            )
 
             dist_dir = get_distorted_dir(workdir, profile)
             vmaf_dir = get_vmaf_dir(workdir, profile)
@@ -286,7 +369,9 @@ class TestIterationContext:
             temp_dir=Path("/tmp/temp"),
             repo_root=Path("/repo"),
             info=MagicMock(),
-            selected_profile=Profile(name="Test", description="Test", settings={}),
+            selected_profile=Profile(
+                name="Test", description="Test", settings={}, encoder=EncoderType.X265
+            ),
             total_frames=10000,
             guard_start_frames=100,
             guard_end_frames=100,
@@ -306,7 +391,9 @@ class TestIterationContext:
             temp_dir=Path("/tmp/temp"),
             repo_root=Path("/repo"),
             info=MagicMock(),
-            selected_profile=Profile(name="Test", description="Test", settings={}),
+            selected_profile=Profile(
+                name="Test", description="Test", settings={}, encoder=EncoderType.X265
+            ),
             total_frames=10000,
             guard_start_frames=100,
             guard_end_frames=100,
@@ -327,7 +414,9 @@ class TestIterationContext:
             temp_dir=Path("/tmp/temp"),
             repo_root=Path("/repo"),
             info=MagicMock(),
-            selected_profile=Profile(name="Test", description="Test", settings={}),
+            selected_profile=Profile(
+                name="Test", description="Test", settings={}, encoder=EncoderType.X265
+            ),
             total_frames=10000,
             guard_start_frames=100,
             guard_end_frames=200,
@@ -348,7 +437,9 @@ class TestIterationContext:
             temp_dir=Path("/tmp/temp"),
             repo_root=Path("/repo"),
             info=MagicMock(),
-            selected_profile=Profile(name="Test", description="Test", settings={}),
+            selected_profile=Profile(
+                name="Test", description="Test", settings={}, encoder=EncoderType.X265
+            ),
             total_frames=10000,
             guard_start_frames=0,
             guard_end_frames=0,
@@ -368,7 +459,9 @@ class TestIterationContext:
             temp_dir=Path("/tmp/temp"),
             repo_root=Path("/repo"),
             info=MagicMock(),
-            selected_profile=Profile(name="Test", description="Test", settings={}),
+            selected_profile=Profile(
+                name="Test", description="Test", settings={}, encoder=EncoderType.X265
+            ),
             total_frames=10000,
             guard_start_frames=100,
             guard_end_frames=100,

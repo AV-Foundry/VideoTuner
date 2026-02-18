@@ -39,6 +39,18 @@ X265_PROGRESS_RE = re.compile(
     re.IGNORECASE,
 )
 
+# x264 frame output: "frame 123:" or "frame 123 "
+X264_FRAME_RE = re.compile(r"frame\s+(\d+)(?::|\s)", re.IGNORECASE)
+
+# x264 encoded summary: "encoded 123 frames"
+X264_ENCODED_RE = re.compile(r"encoded\s+(\d+)\s+frames", re.IGNORECASE)
+
+# x264 progress bar: "[  5.0%] 50/1000 frames, 25.00 fps, ..."
+X264_PROGRESS_RE = re.compile(
+    r"\[\s*(?P<pct>\d+(?:\.\d+)?)%\s*\]\s*(?P<done>\d+)\s*/\s*(?P<total>\d+)\s+frames",
+    re.IGNORECASE,
+)
+
 # mkvmerge percentage: "Progress: 50%"
 MKVMERGE_PCT_RE = re.compile(r"(\d{1,3})%")
 

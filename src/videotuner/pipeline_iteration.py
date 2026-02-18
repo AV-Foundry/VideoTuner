@@ -299,9 +299,9 @@ def _encode_crf_metric(
     Returns:
         Path to the encoded MKV file, or None if encoding failed
     """
-    from .create_encodes import encode_x265_concatenated_distorted, mux_hevc_to_mkv
+    from .create_encodes import encode_concatenated_distorted, mux_to_mkv
 
-    # Encode to HEVC
+    # Encode to bitstream
     with ctx.display.stage(
         f"Encoding {metric_label} samples",
         total=metric_params.total_frames,
@@ -309,12 +309,13 @@ def _encode_crf_metric(
         transient=True,
         show_done=True,
     ) as enc_stage:
-        enc_handler = enc_stage.make_x265_handler(
-            total_frames=metric_params.total_frames
+        enc_handler = enc_stage.make_encoder_handler(
+            total_frames=metric_params.total_frames,
+            encoder_type=ctx.selected_profile.encoder,
         )
 
         try:
-            hevc_path = encode_x265_concatenated_distorted(
+            bitstream_path = encode_concatenated_distorted(
                 source_path=ctx.input_path,
                 output_path=output_path,
                 interval_frames=metric_params.interval_frames,
@@ -336,12 +337,14 @@ def _encode_crf_metric(
                 crop_values=ctx.crop_values,
                 metric_label=metric_label,
             )
-            ctx.log.info("%s distorted HEVC created: %s", metric_label, hevc_path.name)
+            ctx.log.info(
+                "%s distorted bitstream created: %s", metric_label, bitstream_path.name
+            )
         except Exception as e:
             ctx.log.error("Failed to create %s distorted encode: %s", metric_label, e)
             return None
 
-    # Mux HEVC to MKV
+    # Mux bitstream to MKV
     with ctx.display.stage(
         f"Muxing {metric_label} samples",
         total=100,
@@ -352,8 +355,8 @@ def _encode_crf_metric(
         mux_handler = mux_stage.make_percent_handler()
 
         try:
-            mux_hevc_to_mkv(
-                hevc_path=hevc_path,
+            mux_to_mkv(
+                bitstream_path=bitstream_path,
                 output_path=output_path,
                 mkvmerge_bin=ctx.args.mkvmerge_bin,
                 cwd=ctx.repo_root,
@@ -368,7 +371,7 @@ def _encode_crf_metric(
             return None
         finally:
             try:
-                hevc_path.unlink()
+                bitstream_path.unlink()
             except Exception:
                 pass
 
@@ -789,7 +792,7 @@ def _encode_bitrate_metric(
     Returns:
         Path to the encoded file, or None if encoding failed
     """
-    from .create_encodes import encode_x265_concatenated_bitrate
+    from .create_encodes import encode_concatenated_bitrate
     from .profiles import create_multipass_profile
 
     if is_multipass:
@@ -804,8 +807,9 @@ def _encode_bitrate_metric(
             transient=True,
             show_done=False,
         ) as enc_stage:
-            enc_handler = enc_stage.make_x265_handler(
-                total_frames=metric_params.total_frames
+            enc_handler = enc_stage.make_encoder_handler(
+                total_frames=metric_params.total_frames,
+                encoder_type=profile.encoder,
             )
 
             if ctx.temp_dir:
@@ -813,7 +817,7 @@ def _encode_bitrate_metric(
             else:
                 pass1_output = output_path.parent / f"pass1_{output_path.name}"
 
-            _ = encode_x265_concatenated_bitrate(
+            _ = encode_concatenated_bitrate(
                 source_path=ctx.input_path,
                 output_path=pass1_output,
                 interval_frames=metric_params.interval_frames,
@@ -856,8 +860,9 @@ def _encode_bitrate_metric(
                 transient=True,
                 show_done=False,
             ) as enc_stage:
-                enc_handler = enc_stage.make_x265_handler(
-                    total_frames=metric_params.total_frames
+                enc_handler = enc_stage.make_encoder_handler(
+                    total_frames=metric_params.total_frames,
+                    encoder_type=profile.encoder,
                 )
 
                 if ctx.temp_dir:
@@ -865,7 +870,7 @@ def _encode_bitrate_metric(
                 else:
                     pass3_output = output_path.parent / f"pass3_{output_path.name}"
 
-                _ = encode_x265_concatenated_bitrate(
+                _ = encode_concatenated_bitrate(
                     source_path=ctx.input_path,
                     output_path=pass3_output,
                     interval_frames=metric_params.interval_frames,
@@ -910,11 +915,12 @@ def _encode_bitrate_metric(
             transient=True,
             show_done=True,
         ) as enc_stage:
-            enc_handler = enc_stage.make_x265_handler(
-                total_frames=metric_params.total_frames
+            enc_handler = enc_stage.make_encoder_handler(
+                total_frames=metric_params.total_frames,
+                encoder_type=profile.encoder,
             )
 
-            _ = encode_x265_concatenated_bitrate(
+            _ = encode_concatenated_bitrate(
                 source_path=ctx.input_path,
                 output_path=output_path,
                 interval_frames=metric_params.interval_frames,
@@ -944,11 +950,12 @@ def _encode_bitrate_metric(
             transient=True,
             show_done=True,
         ) as enc_stage:
-            enc_handler = enc_stage.make_x265_handler(
-                total_frames=metric_params.total_frames
+            enc_handler = enc_stage.make_encoder_handler(
+                total_frames=metric_params.total_frames,
+                encoder_type=profile.encoder,
             )
 
-            _ = encode_x265_concatenated_bitrate(
+            _ = encode_concatenated_bitrate(
                 source_path=ctx.input_path,
                 output_path=output_path,
                 interval_frames=metric_params.interval_frames,

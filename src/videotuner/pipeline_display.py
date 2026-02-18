@@ -57,9 +57,11 @@ def display_ignored_args_warnings(
     bitrate_profile_names: list[str],
     crf_start_value: float,
     crf_interval: float,
-    has_targets: bool,
 ) -> None:
     """Display warnings for arguments that will be ignored when using bitrate profiles.
+
+    Only CRF-specific arguments (start value, interval) are warned about.
+    Quality targets are now evaluated for bitrate profiles and are not ignored.
 
     Args:
         console: Rich console for output
@@ -67,7 +69,6 @@ def display_ignored_args_warnings(
         bitrate_profile_names: Names of profiles that use bitrate mode (empty if none)
         crf_start_value: The CRF start value from args
         crf_interval: The CRF interval from args
-        has_targets: True if any quality targets are specified
     """
     if not bitrate_profile_names:
         return
@@ -83,12 +84,6 @@ def display_ignored_args_warnings(
     if crf_interval != DEFAULT_CRF_INTERVAL:
         warnings.append(
             f"--crf-interval {crf_interval} will be ignored for bitrate profiles: {profiles_str}"
-        )
-
-    # Check for targets (these are ignored for bitrate profiles)
-    if has_targets:
-        warnings.append(
-            f"Quality targets will be ignored for bitrate profiles: {profiles_str}"
         )
 
     # Display warnings
@@ -453,15 +448,13 @@ def display_multi_profile_results(
         title_justify="left",
     )
 
-    # Check if we have any CRF profiles (needed for winner highlighting)
+    # Check if we have any CRF profiles
     has_crf_profiles = any(result.optimal_crf is not None for result in results)
 
     # Add columns: Metric name + one column per profile
     table.add_column("Metric", style="white", min_width=18)
     for rank, result in enumerate(results, 1):
-        is_winner = (
-            rank == 1 and has_crf_profiles
-        )  # Only highlight winner for CRF profiles
+        is_winner = rank == 1  # Always highlight the top-ranked profile
         profile_header = f"#{rank} {result.profile_name}"
         if is_winner:
             table.add_column(
@@ -493,8 +486,8 @@ def display_multi_profile_results(
 
             if value is not None:
                 formatted_value = f"{value:.{decimals}f}"
-                # Add checkmark if target is met (CRF profiles only)
-                if is_target and not result.is_bitrate_mode:
+                # Add checkmark if target is met (for profiles where targets were evaluated)
+                if is_target and result.meets_all_targets is not None:
                     target = next(
                         (t for t in targets if t.metric_name == metric_key), None
                     )
@@ -536,34 +529,43 @@ def display_multi_profile_results(
                 row_values.append("-")
         table.add_row(*row_values)
 
-    # Add Targets Met row (only if there are targets and at least one CRF profile)
-    if targets and has_crf_profiles:
+    # Add Targets Met row (when targets exist and any profile was evaluated against them)
+    has_evaluated_profiles = any(r.meets_all_targets is not None for r in results)
+    if targets and has_evaluated_profiles:
         row_values = ["All Targets Met"]
         for result in results:
-            if result.is_bitrate_mode:
-                # Bitrate profile - targets don't apply
-                row_values.append("-")
-            elif result.meets_all_targets is True:
+            if result.meets_all_targets is True:
                 row_values.append("✓")
-            else:
+            elif result.meets_all_targets is False:
                 row_values.append("✗")
+            else:
+                # meets_all_targets is None (not evaluated against targets)
+                row_values.append("-")
         table.add_row(*row_values)
 
     console.print()
     console.print(table)
 
     # Show appropriate ranking explanation based on profile types
-    if has_crf_profiles and targets:
+    all_abr = not has_crf_profiles
+    has_targets_specified = len(targets) > 0
+
+    if all_abr and has_targets_specified:
         console.print(
-            "[dim]Ranked by target achievement, then lowest predicted bitrate (winner highlighted)[/dim]"
+            "[dim]Ranked by target achievement, then quality score priority (winner highlighted)[/dim]"
         )
-    elif has_crf_profiles:
+    elif all_abr:
         console.print(
-            "[dim]Ranked by lowest predicted bitrate (winner highlighted)[/dim]"
+            "[dim]Ranked by quality score priority (winner highlighted)[/dim]"
+        )
+    elif has_targets_specified:
+        console.print(
+            "[dim]Ranked by target achievement, then lowest predicted bitrate with quality tiebreaker (winner highlighted)[/dim]"
         )
     else:
-        # Bitrate-only profiles
-        console.print("[dim]Sorted by predicted bitrate[/dim]")
+        console.print(
+            "[dim]Ranked by lowest predicted bitrate with quality tiebreaker (winner highlighted)[/dim]"
+        )
 
     # Show key legend only when checkmarks are displayed
     if has_checkmarks:

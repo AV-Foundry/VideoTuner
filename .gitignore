@@ -93,7 +93,10 @@ dmypy.json
 # Project-specific
 jobs/
 *.lwi
-x265_profiles.yaml
+profiles.yaml
+
+# Integration tests (scripts, profiles, and user-supplied test clips)
+tests/integration/
 
 # Claude Code
 CLAUDE.md

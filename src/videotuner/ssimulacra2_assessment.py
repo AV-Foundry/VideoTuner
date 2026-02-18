@@ -141,9 +141,8 @@ try:
         sys.exit(1)
 
     print("[vszip] Running SSIMULACRA2 comparison...", file=sys.stderr, flush=True)
-    # vszip.Metrics handles format conversion internally
-    # mode=0 selects SSIMULACRA2 metric
-    result = ref.vszip.Metrics(dis, mode=0)
+    # vszip.SSIMULACRA2 handles format conversion internally
+    result = ref.vszip.SSIMULACRA2(dis)
 
     total_frames = len(result)
     print(f"[vszip] Processing {{total_frames}} frames", file=sys.stderr, flush=True)
@@ -155,12 +154,12 @@ try:
     # Iterate frames and collect scores
     for i in range(total_frames):
         frame = result.get_frame(i)
-        score = frame.props.get("_SSIMULACRA2", None)
+        score = frame.props.get("SSIMULACRA2", None)
         if score is not None:
             # Print score to stdout for parsing
             print(f"SCORE:{{score}}", flush=True)
         else:
-            print(f"WARNING: Frame {{i}} has no _SSIMULACRA2 property", file=sys.stderr, flush=True)
+            print(f"WARNING: Frame {{i}} has no SSIMULACRA2 property", file=sys.stderr, flush=True)
         # Progress to stderr for line_handler
         print(f"vszip progress: {{i + 1}}/{{total_frames}}", file=sys.stderr, flush=True)
 

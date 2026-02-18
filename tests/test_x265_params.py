@@ -1,8 +1,8 @@
-"""Tests for encoder_params module."""
+"""Tests for x265_params module."""
 
 from __future__ import annotations
 
-from videotuner.encoder_params import build_global_x265_params, VALID_PRESETS
+from videotuner.x265_params import build_global_x265_params, VALID_PRESETS
 from videotuner.media import VideoInfo
 
 

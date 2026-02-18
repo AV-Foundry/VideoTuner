@@ -151,8 +151,8 @@ class TestMultiProfileResult:
         )
         assert result.meets_all_targets is False
 
-    def test_meets_all_targets_none_for_bitrate_profile(self):
-        """Test meets_all_targets is None for bitrate profiles (targets N/A)."""
+    def test_meets_all_targets_none_for_bitrate_profile_without_targets(self):
+        """Test meets_all_targets is None for bitrate profiles when no targets specified."""
         result = MultiProfileResult(
             profile_name="BitrateProfile",
             optimal_crf=None,
@@ -163,12 +163,38 @@ class TestMultiProfileResult:
         )
         assert result.meets_all_targets is None
 
+    def test_meets_all_targets_bool_for_bitrate_profile_with_targets(self):
+        """Test meets_all_targets can be True/False for bitrate profiles with targets."""
+        result_meets = MultiProfileResult(
+            profile_name="BitrateProfile",
+            optimal_crf=None,
+            scores={"vmaf_mean": 95.0},
+            predicted_bitrate_kbps=8000.0,
+            converged=True,
+            meets_all_targets=True,
+        )
+        assert result_meets.meets_all_targets is True
+        assert result_meets.is_bitrate_mode is True
+
+        result_fails = MultiProfileResult(
+            profile_name="BitrateProfile",
+            optimal_crf=None,
+            scores={"vmaf_mean": 85.0},
+            predicted_bitrate_kbps=8000.0,
+            converged=True,
+            meets_all_targets=False,
+        )
+        assert result_fails.meets_all_targets is False
+        assert result_fails.is_bitrate_mode is True
+
 
 class TestMultiProfileRanking:
-    """Tests for multi-profile ranking logic with mixed CRF and bitrate profiles."""
+    """Tests for multi-profile ranking logic using rank_profile_results."""
 
     def test_crf_meeting_targets_ranks_before_crf_failing_targets(self):
         """Test CRF profiles meeting targets rank before those failing."""
+        from videotuner.pipeline_multi_profile import rank_profile_results
+
         meets = MultiProfileResult(
             profile_name="MeetsTargets",
             optimal_crf=28.0,
@@ -185,104 +211,44 @@ class TestMultiProfileRanking:
             converged=True,
             meets_all_targets=False,
         )
-        results = [meets, fails]
 
-        # Apply ranking logic (same as pipeline.py)
-        meets_or_na = [
-            r for r in results if r.meets_all_targets is True or r.is_bitrate_mode
-        ]
-        fails_targets = [
-            r for r in results if r.meets_all_targets is False and not r.is_bitrate_mode
-        ]
-        meets_or_na.sort(key=lambda r: r.predicted_bitrate_kbps)
-        fails_targets.sort(key=lambda r: r.predicted_bitrate_kbps)
-        ranked = meets_or_na + fails_targets
+        ranked = rank_profile_results([meets, fails])
 
         # MeetsTargets should win despite higher bitrate
         assert ranked[0].profile_name == "MeetsTargets"
         assert ranked[1].profile_name == "FailsTargets"
 
-    def test_bitrate_profiles_rank_with_crf_meeting_targets(self):
-        """Test bitrate profiles rank alongside CRF profiles that meet targets."""
-        crf_meets = MultiProfileResult(
-            profile_name="CRFMeets",
-            optimal_crf=28.0,
-            scores={"vmaf_mean": 95.0},
-            predicted_bitrate_kbps=5000.0,
-            converged=True,
-            meets_all_targets=True,
-        )
-        bitrate = MultiProfileResult(
-            profile_name="Bitrate",
-            optimal_crf=None,
-            scores={"vmaf_mean": 93.0},
-            predicted_bitrate_kbps=4000.0,  # Lower bitrate
-            converged=True,
-            meets_all_targets=None,  # N/A for bitrate
-        )
-        crf_fails = MultiProfileResult(
-            profile_name="CRFFails",
-            optimal_crf=32.0,
-            scores={"vmaf_mean": 88.0},
-            predicted_bitrate_kbps=3000.0,  # Lowest bitrate
-            converged=True,
-            meets_all_targets=False,
-        )
-        results = [crf_meets, bitrate, crf_fails]
+    def test_bitrate_only_profiles_sorted_by_quality(self):
+        """Test bitrate-only profiles are sorted by quality scores, not bitrate."""
+        from videotuner.pipeline_multi_profile import rank_profile_results
 
-        # Apply ranking logic
-        meets_or_na = [
-            r for r in results if r.meets_all_targets is True or r.is_bitrate_mode
-        ]
-        fails_targets = [
-            r for r in results if r.meets_all_targets is False and not r.is_bitrate_mode
-        ]
-        meets_or_na.sort(key=lambda r: r.predicted_bitrate_kbps)
-        fails_targets.sort(key=lambda r: r.predicted_bitrate_kbps)
-        ranked = meets_or_na + fails_targets
-
-        # Bitrate (4000) wins over CRFMeets (5000), CRFFails (3000) is last
-        assert ranked[0].profile_name == "Bitrate"
-        assert ranked[1].profile_name == "CRFMeets"
-        assert ranked[2].profile_name == "CRFFails"
-
-    def test_bitrate_only_profiles_sorted_by_bitrate(self):
-        """Test bitrate-only profiles are sorted by predicted bitrate."""
-        bitrate_high = MultiProfileResult(
-            profile_name="BitrateHigh",
+        bitrate_high_q = MultiProfileResult(
+            profile_name="BitrateHighQ",
             optimal_crf=None,
             scores={"vmaf_mean": 96.0},
             predicted_bitrate_kbps=8000.0,
             converged=True,
             meets_all_targets=None,
         )
-        bitrate_low = MultiProfileResult(
-            profile_name="BitrateLow",
+        bitrate_low_q = MultiProfileResult(
+            profile_name="BitrateLowQ",
             optimal_crf=None,
             scores={"vmaf_mean": 92.0},
             predicted_bitrate_kbps=4000.0,
             converged=True,
             meets_all_targets=None,
         )
-        results = [bitrate_high, bitrate_low]
 
-        # Apply ranking logic
-        meets_or_na = [
-            r for r in results if r.meets_all_targets is True or r.is_bitrate_mode
-        ]
-        fails_targets = [
-            r for r in results if r.meets_all_targets is False and not r.is_bitrate_mode
-        ]
-        meets_or_na.sort(key=lambda r: r.predicted_bitrate_kbps)
-        fails_targets.sort(key=lambda r: r.predicted_bitrate_kbps)
-        ranked = meets_or_na + fails_targets
+        ranked = rank_profile_results([bitrate_low_q, bitrate_high_q])
 
-        # Lower bitrate wins
-        assert ranked[0].profile_name == "BitrateLow"
-        assert ranked[1].profile_name == "BitrateHigh"
+        # Higher quality wins (all-ABR ranks by quality, not bitrate)
+        assert ranked[0].profile_name == "BitrateHighQ"
+        assert ranked[1].profile_name == "BitrateLowQ"
 
     def test_within_tier_sorted_by_lowest_bitrate(self):
-        """Test profiles within same tier are sorted by lowest bitrate."""
+        """Test CRF profiles within same tier are sorted by lowest bitrate."""
+        from videotuner.pipeline_multi_profile import rank_profile_results
+
         crf_a = MultiProfileResult(
             profile_name="CRF_A",
             optimal_crf=26.0,
@@ -299,18 +265,8 @@ class TestMultiProfileRanking:
             converged=True,
             meets_all_targets=True,
         )
-        results = [crf_a, crf_b]
 
-        # Apply ranking logic
-        meets_or_na = [
-            r for r in results if r.meets_all_targets is True or r.is_bitrate_mode
-        ]
-        fails_targets = [
-            r for r in results if r.meets_all_targets is False and not r.is_bitrate_mode
-        ]
-        meets_or_na.sort(key=lambda r: r.predicted_bitrate_kbps)
-        fails_targets.sort(key=lambda r: r.predicted_bitrate_kbps)
-        ranked = meets_or_na + fails_targets
+        ranked = rank_profile_results([crf_a, crf_b])
 
         # CRF_B wins with lower bitrate
         assert ranked[0].profile_name == "CRF_B"
@@ -568,7 +524,6 @@ class TestIgnoredArgsWarning:
             bitrate_profile_names=[],
             crf_start_value=15.0,  # Non-default
             crf_interval=0.25,  # Non-default
-            has_targets=True,
         )
 
         output = buffer.getvalue()
@@ -585,7 +540,6 @@ class TestIgnoredArgsWarning:
             bitrate_profile_names=["Streaming 1080p"],
             crf_start_value=15.0,  # Non-default
             crf_interval=DEFAULT_CRF_INTERVAL,
-            has_targets=False,
         )
 
         output = strip_ansi(buffer.getvalue())
@@ -605,7 +559,6 @@ class TestIgnoredArgsWarning:
             bitrate_profile_names=["Streaming 1080p"],
             crf_start_value=DEFAULT_CRF_START_VALUE,
             crf_interval=0.25,  # Non-default
-            has_targets=False,
         )
 
         output = strip_ansi(buffer.getvalue())
@@ -614,8 +567,8 @@ class TestIgnoredArgsWarning:
         assert "ignored" in output
         assert "Streaming 1080p" in output
 
-    def test_warning_for_targets_with_bitrate_profiles(self):
-        """Test that warning is displayed when targets are set with bitrate profiles."""
+    def test_no_warning_with_default_values(self):
+        """Test that no warning is displayed when using default CRF values."""
         console, buffer = _make_console()
         log = logging.getLogger("test")
 
@@ -625,26 +578,6 @@ class TestIgnoredArgsWarning:
             bitrate_profile_names=["Streaming 1080p"],
             crf_start_value=DEFAULT_CRF_START_VALUE,
             crf_interval=DEFAULT_CRF_INTERVAL,
-            has_targets=True,
-        )
-
-        output = strip_ansi(buffer.getvalue())
-        assert "Warning" in output
-        assert "Quality targets will be ignored" in output
-        assert "Streaming 1080p" in output
-
-    def test_no_warning_with_default_values_and_no_targets(self):
-        """Test that no warning is displayed when using defaults without targets."""
-        console, buffer = _make_console()
-        log = logging.getLogger("test")
-
-        display_ignored_args_warnings(
-            console,
-            log,
-            bitrate_profile_names=["Streaming 1080p"],
-            crf_start_value=DEFAULT_CRF_START_VALUE,
-            crf_interval=DEFAULT_CRF_INTERVAL,
-            has_targets=False,
         )
 
         output = buffer.getvalue()
@@ -661,14 +594,12 @@ class TestIgnoredArgsWarning:
             bitrate_profile_names=["Streaming 1080p"],
             crf_start_value=15.0,  # Non-default
             crf_interval=0.25,  # Non-default
-            has_targets=True,
         )
 
         output = strip_ansi(buffer.getvalue())
-        assert output.count("Warning") == 3
+        assert output.count("Warning") == 2
         assert "--crf-start-value 15.0" in output
         assert "--crf-interval 0.25" in output
-        assert "Quality targets will be ignored" in output
 
     def test_warning_lists_multiple_bitrate_profiles(self):
         """Test that warning lists all bitrate profile names."""
@@ -685,7 +616,6 @@ class TestIgnoredArgsWarning:
             ],
             crf_start_value=15.0,  # Non-default
             crf_interval=DEFAULT_CRF_INTERVAL,
-            has_targets=False,
         )
 
         output = strip_ansi(buffer.getvalue())

@@ -1,0 +1,70 @@
+profiles:
+  # x265 (HEVC) profile example
+  - name: "Film - Transparent"
+    encoder: x265
+    description: "Live action film"
+    settings:
+      preset: "slow"
+      no-open-gop: true
+      bframes: 8
+      rc-lookahead: 80
+      tu-intra-depth: 3
+      tu-inter-depth: 3
+      subme: 5
+      deblock: "-3:-3"
+      no-sao: true
+      selective-sao: 0
+      aq-strength: 0.85
+      aq-bias-strength: 1.00
+      psy-rd: 2.10
+      psy-rdoq: 1.05
+      vbv-maxrate: 160000
+      vbv-bufsize: 160000
+      no-cutree: true
+      weightb: true
+      # Conditional parameters (differ by format)
+      aq-mode:
+        hdr: 4
+        sdr: 5
+
+  # x264 (H.264) profile example
+  - name: "Film - x264 Quality"
+    encoder: x264
+    description: "Live action film targeting H.264 delivery"
+    settings:
+      preset: "slow"
+      deblock: "-3:-3"
+      no-dct-decimate: true
+      aq-strength: 0.85
+      psy-rd: "1.00:0.15"
+      bframes: 8
+      ref: 6
+      rc-lookahead: 80
+      vbv-maxrate: 62500
+      vbv-bufsize: 62500
+
+  # x265 ABR (Average Bitrate) profile example
+  - name: "Streaming - x265 ABR"
+    encoder: x265
+    description: "x265 average bitrate for streaming delivery"
+    settings:
+      preset: "slow"
+      bitrate: 8000
+      pass: 1
+      no-open-gop: true
+      vbv-maxrate: 12000
+      vbv-bufsize: 12000
+      aq-mode:
+        hdr: 4
+        sdr: 5
+
+  # x264 ABR (Average Bitrate) profile example
+  - name: "Streaming - x264 ABR"
+    encoder: x264
+    description: "x264 average bitrate for streaming delivery"
+    settings:
+      preset: "slow"
+      bitrate: 8000
+      pass: 1
+      vbv-maxrate: 12000
+      vbv-bufsize: 12000

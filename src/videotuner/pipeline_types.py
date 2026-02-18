@@ -67,7 +67,8 @@ class MultiProfileResult:
     """Results from a single profile in multi-profile mode (CRF search or bitrate).
 
     For CRF profiles: optimal_crf contains the searched value, meets_all_targets is bool
-    For bitrate profiles: optimal_crf is None, meets_all_targets is None (targets N/A)
+    For bitrate profiles: optimal_crf is None, meets_all_targets is True/False when
+        targets are specified, or None when no targets exist
     """
 
     profile_name: str

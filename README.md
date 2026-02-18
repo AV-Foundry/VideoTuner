@@ -25,7 +25,7 @@ quality metrics to find the optimal rate factor for video encoding.
     - [1. Install Python Package](#1-install-python-package)
     - [2. Set Up VapourSynth Portable](#2-set-up-vapoursynth-portable)
     - [3. Install Required Plugins](#3-install-required-plugins)
-    - [4. Install x265 Encoder](#4-install-x265-encoder)
+    - [4. Install Encoders](#4-install-encoders)
 - [Usage](#usage)
   - [Operating Modes](#operating-modes)
     - [1. CRF Search Mode (Default)](#1-crf-search-mode-default)
@@ -38,7 +38,7 @@ quality metrics to find the optimal rate factor for video encoding.
     - [Multi-Pass Encoding](#multi-pass-encoding)
     - [Mode Restrictions](#mode-restrictions)
     - [Multi-Profile Search with Bitrate Profiles](#multi-profile-search-with-bitrate-profiles)
-  - [Auto-Detected x265 Parameters](#auto-detected-x265-parameters)
+  - [Auto-Detected Encoder Parameters](#auto-detected-encoder-parameters)
 - [CLI Reference](#cli-reference)
   - [Mode Selection](#mode-selection)
   - [Encoding Options](#encoding-options)
@@ -80,7 +80,7 @@ VideoTuner uses periodic sampling to efficiently assess video quality without en
 
 1. **Frame Selection**: Samples frames at regular intervals across the video
    - VMAF: Samples 20 consecutive frames every 1600 frames by default (~1 minute at 24fps)
-   - SSIMULACRA2: Samples 10 consecutive frames every 8000 frames by default (~5.5 minutes at 24fps)
+   - SSIMULACRA2: Samples 20 consecutive frames every 1600 frames by default (~1 minute at 24fps)
 
 2. **Automatic Crop Detection** (enabled by default): Analyzes the video to detect and remove letterboxing/pillarboxing before sampling
 
@@ -149,9 +149,10 @@ VideoTuner provides a **predicted bitrate** estimate for the winning profile by 
 
 ## Supported Encoders
 
-Currently supported encoders:
-
+- **x264 (H.264/AVC)**
 - **x265 (HEVC)**
+
+> **Note:** x264 does not support HDR metadata. VideoTuner will error if you attempt to encode an HDR source with x264.
 
 ## System Requirements
 
@@ -165,7 +166,7 @@ VideoTuner and all bundled dependencies are 64-bit Windows binaries. Linux and m
 Both installation methods require these external tools on PATH:
 
 - **FFmpeg** (with libvmaf and libplacebo) and **FFprobe**
-- **MKVToolNix** `mkvmerge` (used to mux x265 output)
+- **MKVToolNix** `mkvmerge` (used to mux encoder output)
 
 ### Pre-built Release (Recommended)
 
@@ -177,13 +178,14 @@ Download the latest release from the [Releases page](https://github.com/AV-Found
 
 **Bundled dependencies (no separate installation required):**
 
-| Component                                                                    | Version    | Description                                                  |
-| ---------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------ |
-| [x265](https://github.com/Patman86/x265-Mod-by-Patman)                       | 4.1+191+33 | HEVC encoder in `tools/x265.exe`                             |
-| [VapourSynth](https://github.com/vapoursynth/vapoursynth)                    | R72        | Portable environment in `vapoursynth-portable/`              |
-| [ffms2](https://github.com/FFMS/ffms2)                                       | 5.0        | Frame-accurate video indexing (`ffms2.dll`, `ffmsindex.exe`) |
-| [LSMASHSource](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works) | 1266.0.0.0 | Video loading for SSIMULACRA2                                |
-| [vszip](https://github.com/dnjulek/vapoursynth-zip)                          | R11        | SSIMULACRA2 quality metric calculation                       |
+| Component                                                                    | Version        | Description                                                  |
+| ---------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------ |
+| [x264](https://github.com/Patman86/x264-Mod-by-Patman)                       | 0.165.3223+26  | H.264 encoder in `tools/x264.exe`                            |
+| [x265](https://github.com/Patman86/x265-Mod-by-Patman)                       | 4.1+223+43     | HEVC encoder in `tools/x265.exe`                             |
+| [VapourSynth](https://github.com/vapoursynth/vapoursynth)                    | R73            | Portable environment in `vapoursynth-portable/`              |
+| [ffms2](https://github.com/FFMS/ffms2)                                       | 5.0            | Frame-accurate video indexing (`ffms2.dll`, `ffmsindex.exe`) |
+| [LSMASHSource](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works) | 1266.0.0.0     | Video loading for SSIMULACRA2                                |
+| [vszip](https://github.com/dnjulek/vapoursynth-zip)                          | R13            | SSIMULACRA2 quality metric calculation                       |
 
 ### From Source
 
@@ -213,10 +215,10 @@ Python dependencies (automatically installed): pyyaml, rich, pymediainfo
 
 #### 2. Set Up VapourSynth Portable
 
-Download `Install-Portable-VapourSynth-R72.ps1` from [VapourSynth R72 releases](https://github.com/vapoursynth/vapoursynth/releases/tag/R72) and run from the repository root:
+Download `Install-Portable-VapourSynth-R73.ps1` from [VapourSynth R73 releases](https://github.com/vapoursynth/vapoursynth/releases/tag/R73) and run from the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Install-Portable-VapourSynth-R72.ps1 -TargetFolder vapoursynth-portable
+powershell -ExecutionPolicy Bypass -File Install-Portable-VapourSynth-R73.ps1 -TargetFolder vapoursynth-portable
 ```
 
 #### 3. Install Required Plugins
@@ -227,15 +229,16 @@ Download the following plugins and place them in `vapoursynth-portable/vs-plugin
 | ------------ | ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
 | ffms2        | 5.0        | [ffms2-5.0-msvc.7z](https://github.com/FFMS/ffms2/releases/tag/5.0)                                                  | `x64/ffms2.dll`, `x64/ffmsindex.exe` |
 | LSMASHSource | 1266.0.0.0 | [L-SMASH-Works-r1266.0.0.0.7z](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works/releases/tag/1266.0.0.0) | `x64/LSMASHSource.dll`               |
-| vszip        | R11        | [vapoursynth-zip-r11-windows-x86_64.zip](https://github.com/dnjulek/vapoursynth-zip/releases/tag/R11)                | `vszip.dll`                          |
+| vszip        | R13        | [vapoursynth-zip-r13-windows-x86_64.zip](https://github.com/dnjulek/vapoursynth-zip/releases/tag/R13)                | `vszip.dll`                          |
 
-#### 4. Install x265 Encoder
+#### 4. Install Encoders
 
-Download x265 and place in `tools/`:
+Download encoders and place in `tools/`:
 
-| Component | Version    | Download                                                                                           | Extract                       |
-| --------- | ---------- | -------------------------------------------------------------------------------------------------- | ----------------------------- |
-| x265      | 4.1+191+33 | [x265-4.1+191+33...7z](https://github.com/Patman86/x265-Mod-by-Patman/releases/tag/4.1%2B191%2B33) | `x265.exe` → `tools/x265.exe` |
+| Component | Version        | Download                                                                                               | Extract                       |
+| --------- | -------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- |
+| x264      | 0.165.3223+26  | [x264-0.165.3223+26...7z](https://github.com/Patman86/x264-Mod-by-Patman/releases/tag/0.165.3223%2B26) | `x264.exe` → `tools/x264.exe` |
+| x265      | 4.1+223+43     | [x265-4.1+223+43...7z](https://github.com/Patman86/x265-Mod-by-Patman/releases/tag/4.1%2B223%2B43)     | `x265.exe` → `tools/x265.exe` |
 
 ## Usage
 
@@ -250,13 +253,13 @@ VideoTuner has three operating modes:
 Finds the optimal CRF value that meets your quality targets using iterative binary search.
 
 ```bash
-# Find optimal CRF with default preset (slow)
-videotuner input.mkv --vmaf-target 95
+# Find optimal CRF with default preset (slow) using x265
+videotuner input.mkv --encoder x265 --vmaf-target 95
 
-# Find optimal CRF with a faster preset
-videotuner input.mkv --preset medium --vmaf-target 95
+# Find optimal CRF with a faster preset using x264
+videotuner input.mkv --encoder x264 --preset medium --vmaf-target 95
 
-# Find optimal CRF with a specific profile
+# Find optimal CRF with a specific profile (encoder is defined in the profile)
 videotuner input.mkv --profile Film --vmaf-target 95 --ssim2-mean-target 80
 ```
 
@@ -265,10 +268,10 @@ videotuner input.mkv --profile Film --vmaf-target 95 --ssim2-mean-target 80
 Performs a single encode at a specified CRF without any quality targets - useful for quick quality checks.
 
 ```bash
-# Single assessment at CRF 18
-videotuner input.mkv --assessment-only --crf-start-value 18
+# Single assessment at CRF 18 using x265
+videotuner input.mkv --encoder x265 --assessment-only --crf-start-value 18
 
-# Assessment with a specific profile
+# Assessment with a specific profile (encoder is defined in the profile)
 videotuner input.mkv --assessment-only --profile Film --crf-start-value 20
 ```
 
@@ -290,8 +293,8 @@ videotuner input.mkv --multi-profile-search Film,animation-group --vmaf-target 9
 **How Multi-Profile Search Works:**
 
 1. **Run CRF Search for Each Profile**: Performs a complete CRF search for each profile to find the optimal CRF value that meets all quality targets
-2. **Rank by Efficiency**: Profiles are ranked by predicted bitrate at their optimal CRF (lowest bitrate wins)
-3. **Select Winner**: The profile with the lowest predicted bitrate that meets all targets is selected
+2. **Rank Results**: Profiles that meet all targets are ranked above those that don't. Within each tier, CRF profiles are ranked by predicted bitrate (lowest wins) with quality scores as a tiebreaker; all-bitrate groups are ranked by quality scores only
+3. **Select Winner**: The best-ranked profile is selected as the winner
 
 **Performance Optimization:** Each subsequent profile's CRF search starts at the previous profile's optimal CRF value for faster convergence.
 
@@ -317,11 +320,12 @@ Quality targets define the minimum acceptable scores. CRF search will find the h
 
 ### Encoding Profiles
 
-Define your x265 encoding profiles in `x265_profiles.yaml`. Each profile specifies x265 parameters that control encoding quality vs. speed tradeoffs.
+Define encoding profiles in `profiles.yaml`. Each profile specifies an encoder and parameters that control encoding quality vs. speed tradeoffs.
 
 ```yaml
 profiles:
   - name: Film
+    encoder: x265
     description: Optimized for live-action film content
     groups:
       - film-group
@@ -331,32 +335,32 @@ profiles:
       psy-rd: 2.0
       psy-rdoq: 1.0
 
-  - name: Animation
-    description: Optimized for animated content
+  - name: Animation-AVC
+    encoder: x264
+    description: Optimized for animated content (H.264)
     groups:
       - animation-group
     settings:
       preset: slow
       aq-mode: 1
       psy-rd: 1.0
-      deblock:
-        hdr: "-2:-2"
-        sdr: "-1:-1"
+      deblock: "-1:-1"
 ```
 
 **Key features:**
 
+- **Encoder selection**: Each profile declares its encoder (`x264` or `x265`)
 - **Groups**: Organize profiles into groups for easy selection with `--multi-profile-search`
-- **Conditional parameters**: Use `hdr`/`sdr` keys for format-specific settings
+- **Conditional parameters**: Use `hdr`/`sdr` keys for format-specific settings (x265 only)
 - **Auto-detection**: Color space, bit depth, and HDR metadata are automatically detected from source
 - **Validation**: Invalid parameters are caught with helpful error messages
 
-An example profile file is included: `x265_profiles.yaml.sample`
+An example profile file is included: `profiles.yaml.sample`
 
 **Preset vs Profile:**
 
-- `--preset`: Use x265's built-in presets (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo). Default: `slow`
-- `--profile`: Use a custom profile from `x265_profiles.yaml`
+- `--preset`: Use a built-in preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow, placebo). Requires `--encoder`. Default: `slow`
+- `--profile`: Use a custom profile from `profiles.yaml` (encoder is defined in the profile)
 
 These options are mutually exclusive - use one or the other.
 
@@ -371,6 +375,7 @@ Add a `bitrate` setting (in kbps) to your profile:
 ```yaml
 profiles:
   - name: Streaming-4K
+    encoder: x265
     description: Fixed bitrate for 4K streaming
     settings:
       preset: slow
@@ -387,6 +392,7 @@ Bitrate profiles support multi-pass encoding for improved quality at the target 
 profiles:
   # 2-Pass encoding (VideoTuner runs: pass 1 → pass 2)
   - name: Streaming-2Pass
+    encoder: x265
     settings:
       preset: slow
       bitrate: 8000
@@ -394,6 +400,7 @@ profiles:
 
   # 3-Pass encoding (VideoTuner runs: pass 1 → pass 3 → pass 2)
   - name: Streaming-3Pass
+    encoder: x265
     settings:
       preset: slow
       bitrate: 8000
@@ -435,9 +442,9 @@ videotuner input.mkv --multi-profile-search Film,Streaming-4K --vmaf-target 95
 ```
 
 - CRF profiles: Run full CRF search to find optimal CRF meeting targets
-- Bitrate profiles: Run single encode at specified bitrate (targets are ignored)
-- Winner selection: Profiles meeting all targets are ranked by predicted bitrate (lowest wins)
-- Bitrate profiles are ranked alongside CRF profiles that meet targets
+- Bitrate profiles: Run single encode at specified bitrate and evaluate against targets (pass/fail only, no CRF iteration)
+- Winner selection: Profiles meeting all targets are ranked above those that don't, then by lowest predicted bitrate with quality score tiebreaker
+- Both CRF and bitrate profiles are treated equally within ranking tiers
 
 **All Bitrate Profiles:**
 
@@ -447,36 +454,44 @@ videotuner input.mkv --multi-profile-search Streaming-4K,Streaming-1080p
 
 When all profiles are bitrate mode:
 
-- Quality targets are **ignored** (a warning is displayed if provided)
 - Each profile encodes at its specified bitrate
-- Profiles are sorted by predicted bitrate for comparison
-- No winner is declared (quality varies based on user-specified bitrates)
+- Quality targets are optionally evaluated (pass/fail only)
+- Profiles are ranked by quality scores (VMAF, then SSIMULACRA2) rather than bitrate
+- A winner is declared based on the best quality scores
 
-### Auto-Detected x265 Parameters
+### Auto-Detected Encoder Parameters
 
-The following x265 parameters are **automatically detected from the source video** and set by default. You can override any of these in your profile if needed:
+The following parameters are **automatically detected from the source video** and set by default. You can override any of these in your profile if needed.
 
-| Parameter        | Default Behavior                                                                           |
-| ---------------- | ------------------------------------------------------------------------------------------ |
-| `colorprim`      | Mapped from source color primaries (e.g., BT.709 → `bt709`, BT.2020 → `bt2020`)            |
-| `transfer`       | Mapped from source transfer characteristics (e.g., PQ → `smpte2084`, HLG → `arib-std-b67`) |
-| `colormatrix`    | Mapped from source color space, or inferred from primaries if unavailable                  |
-| `range`          | Set to `limited` or `full` based on source color range                                     |
-| `output-depth`   | Detected from source pixel format (8, 10, or 12-bit)                                       |
-| `chromaloc`      | Preserved from source chroma sample location if present                                    |
-| `hdr10`          | Enabled for HDR content (PQ/HLG transfer), disabled for SDR                                |
-| `hdr10-opt`      | Enabled for HDR content for QP optimization                                                |
-| `repeat-headers` | Enabled for HDR (required), disabled for SDR                                               |
-| `master-display` | Extracted from source HDR mastering display metadata if present                            |
-| `max-cll`        | Extracted from source MaxCLL/MaxFALL if present                                            |
-| `aud`            | Always enabled (Access Unit Delimiters for compatibility)                                  |
-| `hrd`            | Enabled for non-lossless encodes (VBV compliance)                                          |
+**Shared parameters (x264 and x265):**
+
+| Parameter      | Default Behavior                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------ |
+| `colorprim`    | Mapped from source color primaries (e.g., BT.709 → `bt709`, BT.2020 → `bt2020`)            |
+| `transfer`     | Mapped from source transfer characteristics (e.g., PQ → `smpte2084`, HLG → `arib-std-b67`) |
+| `colormatrix`  | Mapped from source color space, or inferred from primaries if unavailable                  |
+| `range`        | Set from source color range (x265: `limited`/`full`, x264: `tv`/`pc`)                      |
+| `output-depth` | Detected from source pixel format (x265: 8/10/12-bit, x264: 8/10-bit max)                  |
+| `chromaloc`    | Preserved from source chroma sample location if present                                    |
+
+**x265-only parameters:**
+
+| Parameter        | Default Behavior                                            |
+| ---------------- | ----------------------------------------------------------- |
+| `hdr10`          | Enabled for HDR content (PQ/HLG transfer), disabled for SDR |
+| `hdr10-opt`      | Enabled for HDR content for QP optimization                 |
+| `repeat-headers` | Enabled for HDR (required), disabled for SDR                |
+| `master-display` | Extracted from source HDR mastering display metadata        |
+| `max-cll`        | Extracted from source MaxCLL/MaxFALL if present             |
+| `aud`            | Always enabled (Access Unit Delimiters for compatibility)   |
+| `hrd`            | Enabled for non-lossless encodes (VBV compliance)           |
 
 **Example: Override auto-detected parameters:**
 
 ```yaml
 profiles:
   - name: Force-SDR
+    encoder: x265
     description: Force SDR output regardless of source
     settings:
       preset: slow
@@ -498,12 +513,13 @@ Run `videotuner --help` for complete options. Key options include:
 
 ### Encoding Options
 
-| Option                  | Default | Description                                       |
-| ----------------------- | ------- | ------------------------------------------------- |
-| `--preset PRESET`       | `slow`  | x265 preset (mutually exclusive with `--profile`) |
-| `--profile NAME`        | -       | Profile name from `x265_profiles.yaml`            |
-| `--crf-start-value CRF` | `28`    | Starting CRF for search                           |
-| `--crf-interval STEP`   | `0.5`   | Minimum CRF step size                             |
+| Option                   | Default | Description                                                  |
+| ------------------------ | ------- | ------------------------------------------------------------ |
+| `--encoder ENCODER`      | -       | Encoder to use: `x264` or `x265` (required with `--preset`) |
+| `--preset PRESET`        | `slow`  | Encoder preset (mutually exclusive with `--profile`)         |
+| `--profile NAME`         | -       | Profile name from `profiles.yaml`                            |
+| `--crf-start-value CRF`  | `28`   | Starting CRF for search                                      |
+| `--crf-interval STEP`    | `0.5`  | Minimum CRF step size                                        |
 
 ### CropDetect Options
 
@@ -619,7 +635,7 @@ jobs/<input_name>_<timestamp>/
 ├── ssimulacra2/                  # SSIMULACRA2 assessment results
 │   └── <ProfileName>_profile/
 │       └── crf_*.json
-├── temp/                         # Temporary files (VapourSynth scripts, HEVC streams)
+├── temp/                         # Temporary files (VapourSynth scripts, encoder bitstreams)
 └── <name>_<timestamp>.log        # Pipeline log
 ```
 
@@ -695,8 +711,10 @@ The pipeline is organized into modules:
 ### Encoding & Profiles
 
 - `profiles.py` - Profile loading, validation, and group management from YAML config
-- `encoder_params.py` - x265 parameter building, validation, and auto-detection of color/HDR metadata
-- `create_encodes.py` - VapourSynth script generation, x265 encoding (CRF and multi-pass bitrate modes)
+- `encoder_type.py` - `EncoderType` enum for x264/x265 dispatch
+- `x265_params.py` - x265 parameter building, validation, and auto-detection of color/HDR metadata
+- `x264_params.py` - x264 parameter building (no HDR metadata, 10-bit max)
+- `create_encodes.py` - VapourSynth script generation, encoder-agnostic encoding (CRF and multi-pass bitrate modes)
 - `encoding_utils.py` - Shared encoding utilities (HDR detection, VapourSynthPaths/EncoderPaths dataclasses, path resolution)
 
 ### Quality Assessment
@@ -713,7 +731,7 @@ The pipeline is organized into modules:
 
 ## Notes
 
-- Sample encoding uses VapourSynth → x265, then mkvmerge for MKV container
+- Sample encoding uses VapourSynth → x264/x265, then mkvmerge for MKV container
 - For VFR sources, duration calculations use average frame rate (approximation)
 - Profile names and group names must be unique and non-overlapping
 - CRF search will error if it reaches CRF 1 without meeting targets
