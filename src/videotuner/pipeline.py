@@ -460,16 +460,12 @@ def run_pipeline(args: PipelineArgs) -> int:
 
     log_section(log, "Reference Generation")
 
-    # Determine encoder type for lossless reference (matches selected encoder)
+    # Always use x265 for lossless reference: both x264 (--qp 0) and x265
+    # (--lossless) produce visually identical output, but x265 handles HDR
+    # content which x264 cannot.
     from .encoder_type import EncoderType
 
-    if selected_profile:
-        lossless_encoder = selected_profile.encoder
-    elif multi_profile_list:
-        # Use first profile's encoder for lossless reference
-        lossless_encoder = multi_profile_list[0].encoder
-    else:
-        lossless_encoder = EncoderType.X265
+    lossless_encoder = EncoderType.X265
 
     # Create concatenated reference files for each metric
     lossless_profile = Profile(
