@@ -5,6 +5,12 @@ __version__ = "0.4.0"
 RELEASE_NOTES = """
 ## 0.4.0
 
+### Breaking Changes
+
+- Profile YAML files now require an `encoder:` key (`x264` or `x265`) on each profile
+- `--preset` now requires `--encoder` to specify which encoder to use
+- Default profile filename changed from `x265_profiles.yaml` to `profiles.yaml`
+
 ### Features
 
 - Add x264 encoder support with full encoding pipeline alongside existing x265
