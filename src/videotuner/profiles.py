@@ -351,7 +351,8 @@ class Profile:
 
         # 3. Add rate control parameters (lossless, bitrate, or CRF)
         if is_lossless:
-            params.append("--lossless")
+            # Lossless already handled via build_global_x265_params (--lossless)
+            pass
         elif self.is_bitrate_mode:
             # Bitrate mode: add --bitrate, --pass, and --stats
             bitrate_kbps = self.bitrate

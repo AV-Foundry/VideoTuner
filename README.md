@@ -80,7 +80,7 @@ VideoTuner uses periodic sampling to efficiently assess video quality without en
 
 1. **Frame Selection**: Samples frames at regular intervals across the video
    - VMAF: Samples 20 consecutive frames every 1600 frames by default (~1 minute at 24fps)
-   - SSIMULACRA2: Samples 10 consecutive frames every 8000 frames by default (~5.5 minutes at 24fps)
+   - SSIMULACRA2: Samples 20 consecutive frames every 1600 frames by default (~1 minute at 24fps)
 
 2. **Automatic Crop Detection** (enabled by default): Analyzes the video to detect and remove letterboxing/pillarboxing before sampling
 
@@ -180,7 +180,7 @@ Download the latest release from the [Releases page](https://github.com/AV-Found
 
 | Component                                                                    | Version        | Description                                                  |
 | ---------------------------------------------------------------------------- | -------------- | ------------------------------------------------------------ |
-| [x264](https://github.com/Patman86/x264-Mod-by-Patman)                       | 0.165.3223+25  | H.264 encoder in `tools/x264.exe`                            |
+| [x264](https://github.com/Patman86/x264-Mod-by-Patman)                       | 0.165.3223+26  | H.264 encoder in `tools/x264.exe`                            |
 | [x265](https://github.com/Patman86/x265-Mod-by-Patman)                       | 4.1+223+43     | HEVC encoder in `tools/x265.exe`                             |
 | [VapourSynth](https://github.com/vapoursynth/vapoursynth)                    | R73            | Portable environment in `vapoursynth-portable/`              |
 | [ffms2](https://github.com/FFMS/ffms2)                                       | 5.0            | Frame-accurate video indexing (`ffms2.dll`, `ffmsindex.exe`) |
@@ -215,10 +215,10 @@ Python dependencies (automatically installed): pyyaml, rich, pymediainfo
 
 #### 2. Set Up VapourSynth Portable
 
-Download `Install-Portable-VapourSynth-R72.ps1` from [VapourSynth R72 releases](https://github.com/vapoursynth/vapoursynth/releases/tag/R72) and run from the repository root:
+Download `Install-Portable-VapourSynth-R73.ps1` from [VapourSynth R73 releases](https://github.com/vapoursynth/vapoursynth/releases/tag/R73) and run from the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File Install-Portable-VapourSynth-R72.ps1 -TargetFolder vapoursynth-portable
+powershell -ExecutionPolicy Bypass -File Install-Portable-VapourSynth-R73.ps1 -TargetFolder vapoursynth-portable
 ```
 
 #### 3. Install Required Plugins
@@ -229,7 +229,7 @@ Download the following plugins and place them in `vapoursynth-portable/vs-plugin
 | ------------ | ---------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
 | ffms2        | 5.0        | [ffms2-5.0-msvc.7z](https://github.com/FFMS/ffms2/releases/tag/5.0)                                                  | `x64/ffms2.dll`, `x64/ffmsindex.exe` |
 | LSMASHSource | 1266.0.0.0 | [L-SMASH-Works-r1266.0.0.0.7z](https://github.com/HomeOfAviSynthPlusEvolution/L-SMASH-Works/releases/tag/1266.0.0.0) | `x64/LSMASHSource.dll`               |
-| vszip        | R11        | [vapoursynth-zip-r11-windows-x86_64.zip](https://github.com/dnjulek/vapoursynth-zip/releases/tag/R11)                | `vszip.dll`                          |
+| vszip        | R13        | [vapoursynth-zip-r13-windows-x86_64.zip](https://github.com/dnjulek/vapoursynth-zip/releases/tag/R13)                | `vszip.dll`                          |
 
 #### 4. Install Encoders
 
@@ -237,7 +237,7 @@ Download encoders and place in `tools/`:
 
 | Component | Version        | Download                                                                                               | Extract                       |
 | --------- | -------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------- |
-| x264      | 0.165.3223+25  | [x264-0.165.3223+25...7z](https://github.com/Patman86/x264-Mod-by-Patman/releases/tag/0.165.3223%2B25) | `x264.exe` → `tools/x264.exe` |
+| x264      | 0.165.3223+26  | [x264-0.165.3223+26...7z](https://github.com/Patman86/x264-Mod-by-Patman/releases/tag/0.165.3223%2B26) | `x264.exe` → `tools/x264.exe` |
 | x265      | 4.1+223+43     | [x265-4.1+223+43...7z](https://github.com/Patman86/x265-Mod-by-Patman/releases/tag/4.1%2B223%2B43)     | `x265.exe` → `tools/x265.exe` |
 
 ## Usage
@@ -635,7 +635,7 @@ jobs/<input_name>_<timestamp>/
 ├── ssimulacra2/                  # SSIMULACRA2 assessment results
 │   └── <ProfileName>_profile/
 │       └── crf_*.json
-├── temp/                         # Temporary files (VapourSynth scripts, HEVC streams)
+├── temp/                         # Temporary files (VapourSynth scripts, encoder bitstreams)
 └── <name>_<timestamp>.log        # Pipeline log
 ```
 

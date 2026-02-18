@@ -23,8 +23,8 @@ RELEASE_DIR = DIST_DIR / RELEASE_NAME
 
 # External dependency URLs and versions
 # x264 encoder
-X264_VERSION = "0.165.3223+25"
-X264_URL = "https://github.com/Patman86/x264-Mod-by-Patman/releases/download/0.165.3223%2B25/x264-0.165.3223+25-2d47345-.Mod-by-Patman.-x64-gcc15.2.0.7z"
+X264_VERSION = "0.165.3223+26"
+X264_URL = "https://github.com/Patman86/x264-Mod-by-Patman/releases/download/0.165.3223%2B26/x264-0.165.3223+26-ed3d55b-.Mod-by-Patman.-x64-gcc15.2.0.7z"
 
 # x265 encoder
 X265_VERSION = "4.1+223+43"
@@ -49,7 +49,7 @@ VSZIP_DLL = "vszip.dll"
 # To update: download file, run: python -c "import hashlib; print(hashlib.sha256(open('file','rb').read()).hexdigest())"
 CHECKSUMS = {
     "vapoursynth_installer": "5f984e341c2264244b6549e71dd842af74a17274b6bfd494bc25e6c0e2f37439",
-    "x264": "54ace621150589b70029424cfa6b6bc70b60b958367ab85ec543571380b53ac6",
+    "x264": "24a478eb720cc37677d78cce01f38e9d8d3447148b0889cf7a727c6dcdc77b3a",
     "x265": "e36b5c50c779e5625368674a5baba0aec7cd2baaa08155149a4e73033b649070",
     "ffms2": "e867a3df7262865107df40f230f5b8e1455905eba9b8852e6f35b1227537caeb",
     "lsmash": "7189f299730c82e2cef025082095628c1028effb7e7276eae5fb5c9c3f1aef00",
