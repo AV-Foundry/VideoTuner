@@ -254,7 +254,7 @@ Finds the optimal CRF value that meets your quality targets using iterative bina
 
 ```bash
 # Find optimal CRF with default preset (slow) using x265
-videotuner input.mkv --encoder x265 --vmaf-target 95
+videotuner input.mkv --encoder x265 --preset slow --vmaf-target 95
 
 # Find optimal CRF with a faster preset using x264
 videotuner input.mkv --encoder x264 --preset medium --vmaf-target 95
@@ -268,8 +268,8 @@ videotuner input.mkv --profile Film --vmaf-target 95 --ssim2-mean-target 80
 Performs a single encode at a specified CRF without any quality targets - useful for quick quality checks.
 
 ```bash
-# Single assessment at CRF 18 using x265
-videotuner input.mkv --encoder x265 --assessment-only --crf-start-value 18
+# Single assessment at CRF 18 using x265 medium preset
+videotuner input.mkv --encoder x265 --preset medium --assessment-only --crf-start-value 18
 
 # Assessment with a specific profile (encoder is defined in the profile)
 videotuner input.mkv --assessment-only --profile Film --crf-start-value 20
