@@ -1,8 +1,27 @@
 """Version information and release notes for VideoTuner."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 RELEASE_NOTES = """
+## 0.4.0
+
+### Features
+
+- Add x264 encoder support with full encoding pipeline alongside existing x265
+- Add `EncoderType` enum and `encoder:` key in YAML profiles to select encoder per profile
+- Overhaul multi-profile ranking to properly handle ABR/bitrate profiles alongside CRF-based profiles
+
+### Fixes
+
+- Handle CRFFloorError in single-profile search path
+- Update vszip API to R7+ function and property names
+- Always use x265 for lossless reference encoding regardless of profile encoder
+
+### Refactoring
+
+- Rename `encoder_params` module to `x265_params` for clarity
+- Generalize HEVC-specific encoding functions to support both x264 and x265 codecs
+
 ## 0.3.0
 
 ### Breaking Changes
