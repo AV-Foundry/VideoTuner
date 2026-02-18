@@ -383,7 +383,7 @@ def get_effective_metric_priority(
     return promoted + remaining
 
 
-def _metric_priority_sort_key(
+def metric_priority_sort_key(
     result: "MultiProfileResult",
     priority: tuple[str, ...],
 ) -> tuple[float, ...]:
@@ -465,18 +465,18 @@ def rank_profile_results(
         tier1.sort(
             key=lambda r: (
                 r.predicted_bitrate_kbps,
-                _metric_priority_sort_key(r, priority),
+                metric_priority_sort_key(r, priority),
             )
         )
         tier2.sort(
             key=lambda r: (
                 r.predicted_bitrate_kbps,
-                _metric_priority_sort_key(r, priority),
+                metric_priority_sort_key(r, priority),
             )
         )
     else:
         # All-ABR group: sort by metric priority only (no bitrate ranking)
-        tier1.sort(key=lambda r: _metric_priority_sort_key(r, priority))
-        tier2.sort(key=lambda r: _metric_priority_sort_key(r, priority))
+        tier1.sort(key=lambda r: metric_priority_sort_key(r, priority))
+        tier2.sort(key=lambda r: metric_priority_sort_key(r, priority))
 
     return tier1 + tier2

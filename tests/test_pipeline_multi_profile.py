@@ -8,7 +8,7 @@ from videotuner.pipeline_multi_profile import (
     MultiProfileSearchParams,
     rank_profile_results,
     get_effective_metric_priority,
-    _metric_priority_sort_key,
+    metric_priority_sort_key,
 )
 from videotuner.pipeline_types import MultiProfileResult
 from videotuner.encoder_type import EncoderType
@@ -105,8 +105,8 @@ class TestMetricPriority:
             predicted_bitrate_kbps=5000.0,
             converged=True,
         )
-        key_high = _metric_priority_sort_key(result_high, METRIC_PRIORITY)
-        key_low = _metric_priority_sort_key(result_low, METRIC_PRIORITY)
+        key_high = metric_priority_sort_key(result_high, METRIC_PRIORITY)
+        key_low = metric_priority_sort_key(result_low, METRIC_PRIORITY)
         assert key_high < key_low  # Lower key = better
 
     def test_sort_key_missing_scores_rank_last(self):
@@ -125,8 +125,8 @@ class TestMetricPriority:
             predicted_bitrate_kbps=5000.0,
             converged=True,
         )
-        key_full = _metric_priority_sort_key(result_full, METRIC_PRIORITY)
-        key_empty = _metric_priority_sort_key(result_empty, METRIC_PRIORITY)
+        key_full = metric_priority_sort_key(result_full, METRIC_PRIORITY)
+        key_empty = metric_priority_sort_key(result_empty, METRIC_PRIORITY)
         assert key_full < key_empty
 
     def test_sort_key_tiebreaker_on_secondary_metric(self):
@@ -145,8 +145,8 @@ class TestMetricPriority:
             predicted_bitrate_kbps=5000.0,
             converged=True,
         )
-        key_a = _metric_priority_sort_key(result_a, METRIC_PRIORITY)
-        key_b = _metric_priority_sort_key(result_b, METRIC_PRIORITY)
+        key_a = metric_priority_sort_key(result_a, METRIC_PRIORITY)
+        key_b = metric_priority_sort_key(result_b, METRIC_PRIORITY)
         assert key_a < key_b  # Higher vmaf_hmean = better
 
 
