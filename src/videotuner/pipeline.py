@@ -150,7 +150,6 @@ def run_pipeline(args: PipelineArgs) -> int:
         bitrate_profile_names=bitrate_profile_names,
         crf_start_value=args.crf_start_value,
         crf_interval=args.crf_interval,
-        has_targets=has_quality_targets,
     )
 
     # Validate window sizes fit within video duration (after guard bands)
@@ -921,38 +920,36 @@ def run_pipeline(args: PipelineArgs) -> int:
         profile_results = run_multi_profile_search(search_params, ctx_factory)
 
         # Rank results
-        ranked_results = rank_profile_results(profile_results)
+        ranked_results = rank_profile_results(profile_results, targets)
 
         if not ranked_results:
             display.console.print(
-                "[bold red]No profiles successfully met targets[/bold red]"
+                "[bold red]No profiles produced valid results[/bold red]"
             )
             log.error("Multi-profile search failed - no valid results")
             return 1
 
         winner = ranked_results[0]
-        has_crf_profiles = any(r.optimal_crf is not None for r in ranked_results)
 
         # Display ranked comparison table
         display_multi_profile_results(
             display.console, ranked_results, targets, args.metric_decimals
         )
 
-        # Display winner (only for CRF profiles - bitrate profiles aren't comparable)
+        # Display winner
         display.console.print()
-        if has_crf_profiles:
-            if winner.optimal_crf is not None:
-                display.console.print(
-                    f"[bold green]Winner: {winner.profile_name} at CRF {winner.optimal_crf:.1f}[/bold green]"
-                )
-            else:
-                display.console.print(
-                    f"[bold green]Winner: {winner.profile_name} (Bitrate mode)[/bold green]"
-                )
-            bitrate_display = format_bitrate_percentage(
-                winner.predicted_bitrate_kbps, info.video_bitrate_kbps
+        if winner.optimal_crf is not None:
+            display.console.print(
+                f"[bold green]Winner: {winner.profile_name} at CRF {winner.optimal_crf:.1f}[/bold green]"
             )
-            display.console.print(f"[cyan]Predicted Bitrate: {bitrate_display}[/cyan]")
+        else:
+            display.console.print(
+                f"[bold green]Winner: {winner.profile_name} (Bitrate mode)[/bold green]"
+            )
+        bitrate_display = format_bitrate_percentage(
+            winner.predicted_bitrate_kbps, info.video_bitrate_kbps
+        )
+        display.console.print(f"[cyan]Predicted Bitrate: {bitrate_display}[/cyan]")
 
         # Show warning if applicable
         check_and_display_bitrate_warning(
@@ -964,22 +961,19 @@ def run_pipeline(args: PipelineArgs) -> int:
             profile_name=winner.profile_name,
         )
 
-        if has_crf_profiles:
-            if winner.optimal_crf is not None:
-                log.info(
-                    "Multi-profile search complete - Winner: %s at CRF %.1f (%.0f kbps)",
-                    winner.profile_name,
-                    winner.optimal_crf,
-                    winner.predicted_bitrate_kbps,
-                )
-            else:
-                log.info(
-                    "Multi-profile search complete - Winner: %s (Bitrate mode, %.0f kbps)",
-                    winner.profile_name,
-                    winner.predicted_bitrate_kbps,
-                )
+        if winner.optimal_crf is not None:
+            log.info(
+                "Multi-profile search complete - Winner: %s at CRF %.1f (%.0f kbps)",
+                winner.profile_name,
+                winner.optimal_crf,
+                winner.predicted_bitrate_kbps,
+            )
         else:
-            log.info("Multi-profile search complete (bitrate profiles)")
+            log.info(
+                "Multi-profile search complete - Winner: %s (Bitrate mode, %.0f kbps)",
+                winner.profile_name,
+                winner.predicted_bitrate_kbps,
+            )
 
         # Set winner's scores for final results display
         optimal_search_scores = {

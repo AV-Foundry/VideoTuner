@@ -93,3 +93,23 @@ PERCENTILE_5PCT: float = 0.05
 
 # 95th percentile (top 5%)
 PERCENTILE_95PCT: float = 0.95
+
+# =============================================================================
+# Metric Priority Constants
+# =============================================================================
+
+# Default priority ordering for quality metrics (highest priority first).
+# Used for ranking profiles by quality scores when bitrate comparison
+# is not applicable (e.g., all-ABR groups), and as a tiebreaker in mixed groups.
+# When user specifies targets, targeted metrics are promoted to the front
+# of this list while preserving relative order within each group.
+METRIC_PRIORITY: tuple[str, ...] = (
+    "vmaf_mean",
+    "vmaf_hmean",
+    "vmaf_1pct",
+    "vmaf_min",
+    "ssim2_mean",
+    "ssim2_5pct",
+    "ssim2_95pct",
+    "ssim2_median",
+)

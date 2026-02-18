@@ -293,8 +293,8 @@ videotuner input.mkv --multi-profile-search Film,animation-group --vmaf-target 9
 **How Multi-Profile Search Works:**
 
 1. **Run CRF Search for Each Profile**: Performs a complete CRF search for each profile to find the optimal CRF value that meets all quality targets
-2. **Rank by Efficiency**: Profiles are ranked by predicted bitrate at their optimal CRF (lowest bitrate wins)
-3. **Select Winner**: The profile with the lowest predicted bitrate that meets all targets is selected
+2. **Rank Results**: Profiles that meet all targets are ranked above those that don't. Within each tier, CRF profiles are ranked by predicted bitrate (lowest wins) with quality scores as a tiebreaker; all-bitrate groups are ranked by quality scores only
+3. **Select Winner**: The best-ranked profile is selected as the winner
 
 **Performance Optimization:** Each subsequent profile's CRF search starts at the previous profile's optimal CRF value for faster convergence.
 
@@ -442,9 +442,9 @@ videotuner input.mkv --multi-profile-search Film,Streaming-4K --vmaf-target 95
 ```
 
 - CRF profiles: Run full CRF search to find optimal CRF meeting targets
-- Bitrate profiles: Run single encode at specified bitrate (targets are ignored)
-- Winner selection: Profiles meeting all targets are ranked by predicted bitrate (lowest wins)
-- Bitrate profiles are ranked alongside CRF profiles that meet targets
+- Bitrate profiles: Run single encode at specified bitrate and evaluate against targets (pass/fail only, no CRF iteration)
+- Winner selection: Profiles meeting all targets are ranked above those that don't, then by lowest predicted bitrate with quality score tiebreaker
+- Both CRF and bitrate profiles are treated equally within ranking tiers
 
 **All Bitrate Profiles:**
 
@@ -454,10 +454,10 @@ videotuner input.mkv --multi-profile-search Streaming-4K,Streaming-1080p
 
 When all profiles are bitrate mode:
 
-- Quality targets are **ignored** (a warning is displayed if provided)
 - Each profile encodes at its specified bitrate
-- Profiles are sorted by predicted bitrate for comparison
-- No winner is declared (quality varies based on user-specified bitrates)
+- Quality targets are optionally evaluated (pass/fail only)
+- Profiles are ranked by quality scores (VMAF, then SSIMULACRA2) rather than bitrate
+- A winner is declared based on the best quality scores
 
 ### Auto-Detected Encoder Parameters
 

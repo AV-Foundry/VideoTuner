@@ -77,7 +77,7 @@ def run_multi_profile_search(
         ctx = ctx_factory(profile)
 
         if profile.is_bitrate_mode:
-            result = _run_bitrate_profile(ctx, profile, display, log)
+            result = _run_bitrate_profile(ctx, profile, targets, display, log)
             profile_results.append(result)
             continue
 
@@ -105,6 +105,7 @@ def run_multi_profile_search(
 def _run_bitrate_profile(
     ctx: "IterationContext",
     profile: "Profile",
+    targets: list["QualityTarget"],
     display: "PipelineDisplay",
     log: logging.Logger,
 ) -> "MultiProfileResult":
@@ -113,6 +114,7 @@ def _run_bitrate_profile(
     Args:
         ctx: Iteration context
         profile: Bitrate-mode profile to encode
+        targets: Quality targets to evaluate (empty list if none specified)
         display: Pipeline display instance
         log: Logger instance
 
@@ -121,6 +123,7 @@ def _run_bitrate_profile(
     """
     from .pipeline_iteration import run_single_bitrate_iteration
     from .pipeline_types import MultiProfileResult
+    from .pipeline_validation import check_scores_meet_targets
 
     bitrate_kbps = profile.bitrate or 0
     pass_num = profile.pass_number or 1
@@ -139,18 +142,32 @@ def _run_bitrate_profile(
             _ssim2_distorted_path,
         ) = run_single_bitrate_iteration(ctx, iteration=1)
 
+        # Evaluate targets when specified (pass/fail only, no CRF iteration)
+        meets_all: bool | None = None
+        if targets:
+            meets_all = check_scores_meet_targets(scores, targets)
+
         result = MultiProfileResult(
             profile_name=profile.name,
             optimal_crf=None,
             scores=scores,
             predicted_bitrate_kbps=predicted_bitrate,
             converged=True,
-            meets_all_targets=None,
+            meets_all_targets=meets_all,
         )
 
-        display.console.print(
-            f"[green]✓ Profile {profile.name}: Encoded successfully ({predicted_bitrate:.0f} kbps)[/green]"
-        )
+        if meets_all is True:
+            display.console.print(
+                f"[green]✓ Profile {profile.name}: Encoded successfully ({predicted_bitrate:.0f} kbps) - All targets met[/green]"
+            )
+        elif meets_all is False:
+            display.console.print(
+                f"[yellow]⚠ Profile {profile.name}: Encoded successfully ({predicted_bitrate:.0f} kbps) - Not all targets met[/yellow]"
+            )
+        else:
+            display.console.print(
+                f"[green]✓ Profile {profile.name}: Encoded successfully ({predicted_bitrate:.0f} kbps)[/green]"
+            )
         log.info(
             "Profile %s: Encoded successfully at %d kbps",
             profile.name,
@@ -343,19 +360,79 @@ def _run_crf_profile_search(
     return result, optimal_crf
 
 
+def get_effective_metric_priority(
+    targets: list["QualityTarget"],
+) -> tuple[str, ...]:
+    """Compute effective metric priority with target promotion.
+
+    Metrics that have user-specified targets are promoted to the top of the
+    priority list, preserving their relative order from METRIC_PRIORITY.
+    Non-targeted metrics follow in their default order.
+
+    Args:
+        targets: Quality targets specified by the user
+
+    Returns:
+        Tuple of metric names in effective priority order
+    """
+    from .constants import METRIC_PRIORITY
+
+    target_names = {t.metric_name for t in targets}
+    promoted = tuple(m for m in METRIC_PRIORITY if m in target_names)
+    remaining = tuple(m for m in METRIC_PRIORITY if m not in target_names)
+    return promoted + remaining
+
+
+def _metric_priority_sort_key(
+    result: "MultiProfileResult",
+    priority: tuple[str, ...],
+) -> tuple[float, ...]:
+    """Create a sort key from scores based on metric priority.
+
+    Returns a tuple of negated scores in priority order (negated because
+    Python sorts ascending, but higher scores are better). Missing scores
+    are treated as negative infinity (worst possible).
+
+    Args:
+        result: Profile result to create key for
+        priority: Metric names in priority order
+
+    Returns:
+        Tuple of negated scores for use as sort key (lower = better)
+    """
+    key: list[float] = []
+    for metric_name in priority:
+        score = result.scores.get(metric_name)
+        if score is not None:
+            key.append(-score)  # Negate: higher score = lower sort value = better
+        else:
+            key.append(float("inf"))  # Missing score = worst
+    return tuple(key)
+
+
 def rank_profile_results(
     results: list["MultiProfileResult"],
+    targets: list["QualityTarget"] | None = None,
 ) -> list["MultiProfileResult"]:
-    """Rank profile results by target achievement and bitrate.
+    """Rank profile results using tiered ranking with metric priority.
 
-    Groups results into:
-    1. CRF profiles meeting targets + bitrate profiles (targets N/A)
-    2. CRF profiles failing targets
+    Ranking depends on whether the group contains any CRF profiles:
 
-    Within each group, sorts by predicted bitrate (lowest wins).
+    **All-ABR groups:**
+    - Tier 1: profiles that met all targets (if targets specified)
+    - Tier 2: profiles that didn't meet targets / no targets specified
+    - Within each tier: rank by metric priority (highest score wins)
+    - Bitrate is NOT used for ranking in all-ABR groups
+
+    **Mixed groups (any ABR + any CRF):**
+    - Tier 1: profiles that met all targets (CRF and ABR treated equally)
+    - Tier 2: profiles that didn't meet targets
+    - Within each tier: rank by lowest predicted bitrate, with metric
+      priority as tiebreaker
 
     Args:
         results: List of MultiProfileResult to rank
+        targets: Quality targets (used for metric priority promotion)
 
     Returns:
         Sorted list with best results first
@@ -363,19 +440,43 @@ def rank_profile_results(
     # Filter to valid results only
     valid_results = [r for r in results if r.is_valid()]
 
-    # Group by target achievement
-    meets_or_na = [
-        r for r in valid_results if r.meets_all_targets is True or r.is_bitrate_mode
-    ]
-    fails_targets = [
-        r
-        for r in valid_results
-        if r.meets_all_targets is False and not r.is_bitrate_mode
-    ]
+    if not valid_results:
+        return []
 
-    # Sort each group by bitrate
-    meets_or_na.sort(key=lambda r: r.predicted_bitrate_kbps)
-    fails_targets.sort(key=lambda r: r.predicted_bitrate_kbps)
+    # Compute effective metric priority with target promotion
+    effective_targets = targets or []
+    priority = get_effective_metric_priority(effective_targets)
 
-    # Concatenate: successful profiles ranked first
-    return meets_or_na + fails_targets
+    # Determine if this is an all-ABR group
+    has_crf = any(not r.is_bitrate_mode for r in valid_results)
+
+    # Split into tiers
+    tier1: list[MultiProfileResult] = []  # Met all targets
+    tier2: list[MultiProfileResult] = []  # Failed / no targets
+
+    for r in valid_results:
+        if r.meets_all_targets is True:
+            tier1.append(r)
+        else:
+            tier2.append(r)
+
+    if has_crf:
+        # Mixed group: sort by bitrate, metric priority as tiebreaker
+        tier1.sort(
+            key=lambda r: (
+                r.predicted_bitrate_kbps,
+                _metric_priority_sort_key(r, priority),
+            )
+        )
+        tier2.sort(
+            key=lambda r: (
+                r.predicted_bitrate_kbps,
+                _metric_priority_sort_key(r, priority),
+            )
+        )
+    else:
+        # All-ABR group: sort by metric priority only (no bitrate ranking)
+        tier1.sort(key=lambda r: _metric_priority_sort_key(r, priority))
+        tier2.sort(key=lambda r: _metric_priority_sort_key(r, priority))
+
+    return tier1 + tier2

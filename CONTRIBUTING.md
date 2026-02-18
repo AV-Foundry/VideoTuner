@@ -168,7 +168,7 @@ The codebase follows a pipeline architecture in `src/videotuner/`:
 | `vmaf_assessment.py` | VMAF quality assessment |
 | `ssimulacra2_assessment.py` | SSIMULACRA2 quality assessment |
 | `progress.py` | Rich console progress display |
-| `constants.py` | Centralized constants (CRF limits, thread counts, etc.) |
+| `constants.py` | Centralized constants (CRF limits, thread counts, metric priority, etc.) |
 | `utils.py` | Shared utilities (subprocess execution, file operations) |
 | `encoding_utils.py` | Encoding utilities (HDR detection, path dataclasses) |
 
