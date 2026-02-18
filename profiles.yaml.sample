@@ -42,3 +42,29 @@ profiles:
       rc-lookahead: 80
       vbv-maxrate: 62500
       vbv-bufsize: 62500
+
+  # x265 ABR (Average Bitrate) profile example
+  - name: "Streaming - x265 ABR"
+    encoder: x265
+    description: "x265 average bitrate for streaming delivery"
+    settings:
+      preset: "slow"
+      bitrate: 8000
+      pass: 1
+      no-open-gop: true
+      vbv-maxrate: 12000
+      vbv-bufsize: 12000
+      aq-mode:
+        hdr: 4
+        sdr: 5
+
+  # x264 ABR (Average Bitrate) profile example
+  - name: "Streaming - x264 ABR"
+    encoder: x264
+    description: "x264 average bitrate for streaming delivery"
+    settings:
+      preset: "slow"
+      bitrate: 8000
+      pass: 1
+      vbv-maxrate: 12000
+      vbv-bufsize: 12000
