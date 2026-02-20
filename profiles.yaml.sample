@@ -1,40 +1,67 @@
 profiles:
-  # x265 (HEVC) profile example
-  - name: "Film - Transparent"
+  # ── Film profiles ─────────────────────────────────────────────────
+  # Group profiles together with "groups" so --multi-profile-search
+  # can compare them in a single run.
+
+  # x265 CRF — clean source (low noise / digital)
+  - name: "Film Clean (x265)"
     encoder: x265
-    description: "Live action film"
+    description: "Live action film with minimal grain"
+    groups: ["Film (x265)"]
     settings:
       preset: "slow"
       no-open-gop: true
       bframes: 8
       rc-lookahead: 80
-      tu-intra-depth: 3
-      tu-inter-depth: 3
       subme: 5
       deblock: "-3:-3"
       no-sao: true
-      selective-sao: 0
-      aq-strength: 0.85
-      aq-bias-strength: 1.00
-      psy-rd: 2.10
-      psy-rdoq: 1.05
-      vbv-maxrate: 160000
-      vbv-bufsize: 160000
       no-cutree: true
       weightb: true
+      aq-strength: 0.85
+      vbv-maxrate: 160000
+      vbv-bufsize: 160000
       # Conditional parameters (differ by format)
       aq-mode:
         hdr: 4
         sdr: 5
 
-  # x264 (H.264) profile example
-  - name: "Film - x264 Quality"
+  # x265 CRF — grainy source
+  - name: "Film Grainy (x265)"
+    encoder: x265
+    description: "Live action film with heavy grain or noise"
+    groups: ["Film (x265)"]
+    settings:
+      preset: "slow"
+      no-open-gop: true
+      bframes: 8
+      rc-lookahead: 80
+      subme: 5
+      deblock: "-3:-3"
+      no-sao: true
+      no-cutree: true
+      weightb: true
+      aq-strength: 1.10
+      psy-rd: 2.40
+      psy-rdoq: 1.20
+      tu-intra-depth: 3
+      tu-inter-depth: 3
+      vbv-maxrate: 160000
+      vbv-bufsize: 160000
+      aq-mode:
+        hdr: 4
+        sdr: 5
+
+  # x264 CRF — clean source
+  - name: "Film Clean (x264)"
     encoder: x264
     description: "Live action film targeting H.264 delivery"
+    groups: ["Film (x264)"]
     settings:
       preset: "slow"
       deblock: "-3:-3"
       no-dct-decimate: true
+      aq-mode: 3
       aq-strength: 0.85
       psy-rd: "1.00:0.15"
       bframes: 8
@@ -43,10 +70,13 @@ profiles:
       vbv-maxrate: 62500
       vbv-bufsize: 62500
 
-  # x265 ABR (Average Bitrate) profile example
-  - name: "Streaming - x265 ABR"
+  # ── Streaming profiles ────────────────────────────────────────────
+
+  # x265 ABR (Average Bitrate) — single-pass
+  - name: "Streaming 8 Mbps (x265)"
     encoder: x265
-    description: "x265 average bitrate for streaming delivery"
+    description: "x265 single-pass ABR for streaming delivery"
+    groups: ["Streaming (x265)"]
     settings:
       preset: "slow"
       bitrate: 8000
@@ -58,10 +88,28 @@ profiles:
         hdr: 4
         sdr: 5
 
-  # x264 ABR (Average Bitrate) profile example
-  - name: "Streaming - x264 ABR"
+  # x265 ABR — multi-pass with analysis optimisation
+  - name: "Streaming 8 Mbps 3-Pass (x265)"
+    encoder: x265
+    description: "x265 three-pass ABR with analysis reuse"
+    groups: ["Streaming (x265)"]
+    settings:
+      preset: "slow"
+      bitrate: 8000
+      pass: 3
+      multi-pass-opt-distortion: true
+      multi-pass-opt-analysis: true
+      no-open-gop: true
+      vbv-maxrate: 12000
+      vbv-bufsize: 12000
+      aq-mode:
+        hdr: 4
+        sdr: 5
+
+  # x264 ABR — single-pass
+  - name: "Streaming 8 Mbps (x264)"
     encoder: x264
-    description: "x264 average bitrate for streaming delivery"
+    description: "x264 single-pass ABR for streaming delivery"
     settings:
       preset: "slow"
       bitrate: 8000
