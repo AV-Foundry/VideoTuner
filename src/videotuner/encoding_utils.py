@@ -761,13 +761,20 @@ def run_vspipe_encode(
     encoder_ret = encoder_proc.wait()
     vspipe_ret = vspipe_proc.wait()
 
-    if vspipe_ret != 0:
-        error_detail = "\n".join(vspipe_errors) if vspipe_errors else ""
-        raise RuntimeError(format_command_error(vspipe_ret, vspipe_args, error_detail))
-    if encoder_ret != 0:
-        raise RuntimeError(
-            format_command_error(encoder_ret, encoder_args, "\n".join(captured))
-        )
+    if encoder_ret != 0 or vspipe_ret != 0:
+        encoder_output = "\n".join(captured) if captured else ""
+        vspipe_detail = "\n".join(vspipe_errors) if vspipe_errors else ""
+
+        # Prioritize encoder error: when the encoder dies, the pipe breaks,
+        # causing vspipe to fail with fwrite(). The encoder error is the root cause.
+        if encoder_ret != 0:
+            error_msg = format_command_error(encoder_ret, encoder_args, encoder_output)
+            if vspipe_ret != 0 and vspipe_detail:
+                error_msg += f"\n\nvspipe also failed ({vspipe_ret}):\n{vspipe_detail}"
+            raise RuntimeError(error_msg)
+
+        # vspipe-only failure (e.g., VapourSynth script error)
+        raise RuntimeError(format_command_error(vspipe_ret, vspipe_args, vspipe_detail))
 
     return "\n".join(captured)
 

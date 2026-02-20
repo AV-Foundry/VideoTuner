@@ -1,9 +1,15 @@
 """Tests for pipeline validation utilities."""
 
+from __future__ import annotations
+
 import argparse
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
+
+if TYPE_CHECKING:
+    from videotuner.profiles import Profile
 
 import pytest
 
@@ -597,13 +603,23 @@ class TestValidateArgsCLI:
             _ = validate_args(args, parser)
 
     def test_accepts_multi_profile_search_alone(
-        self, parser: argparse.ArgumentParser
+        self, parser: argparse.ArgumentParser, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Verify --multi-profile-search alone is valid (selected_profile is None)."""
+        # Use sample profiles file so test doesn't depend on user's profiles.yaml
+        from videotuner.profiles import load_profiles as _real_load
+
+        sample_file = Path(__file__).resolve().parent.parent / "profiles.yaml.sample"
+        sample_profiles = _real_load(sample_file)
+
+        def _load_sample(_profile_file: Path | None = None) -> dict[str, Profile]:
+            return sample_profiles
+
+        monkeypatch.setattr("videotuner.profiles.load_profiles", _load_sample)
         args = PipelineArgs(
             input=Path("test.mkv"),
             output=Path("output"),
-            multi_profile_search=["Film"],
+            multi_profile_search=["Film (x265)"],
             vmaf_target=93.0,
         )
         result = validate_args(args, parser)
