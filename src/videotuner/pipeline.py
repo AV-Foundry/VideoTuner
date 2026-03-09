@@ -71,7 +71,6 @@ def run_pipeline(args: PipelineArgs) -> int:
     selected_profile = validation.selected_profile
     multi_profile_list = validation.multi_profile_list
     multi_profile_display = validation.multi_profile_display
-    has_quality_targets = validation.has_quality_targets
 
     crop_detect: bool = bool(args.crop_detect)
 
