@@ -36,7 +36,7 @@ from .pipeline_types import IterationContext
 from .progress import PipelineDisplay
 from .media import parse_video_info, InvalidVideoFileError, get_frame_count
 from .profiles import Profile
-from .utils import ensure_dir
+from .utils import ensure_dir, sanitize_filename
 from .crf_search import (
     CRFFloorError,
     CRFSearchState,
@@ -179,11 +179,12 @@ def run_pipeline(args: PipelineArgs) -> int:
 
     # Default workdir is <repo_root>/jobs/<name>_<timestamp> unless overridden
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_stem = sanitize_filename(input_path.stem)
     if args.workdir:
         workdir: Path = args.workdir
     else:
         jobs_root = repo_root / "jobs"
-        workdir = jobs_root / f"{input_path.stem}_{timestamp}"
+        workdir = jobs_root / f"{safe_stem}_{timestamp}"
     _ = ensure_dir(workdir)
 
     # Create temp subdirectory for temporary files
@@ -191,7 +192,7 @@ def run_pipeline(args: PipelineArgs) -> int:
 
     # Add file logger (default in job folder)
     if not args.log_file:
-        log_file: Path = workdir / f"{input_path.stem}_{timestamp}.log"
+        log_file: Path = workdir / f"{safe_stem}_{timestamp}.log"
     else:
         log_file = Path(args.log_file)
         try:

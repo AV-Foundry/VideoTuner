@@ -1,6 +1,7 @@
 import logging
 import math
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -74,6 +75,22 @@ def clean_float(val: float | None) -> float | None:
     if math.isnan(val):
         return None
     return round(val, 2)
+
+
+def sanitize_filename(name: str) -> str:
+    """Sanitize a filename by replacing characters problematic for FFmpeg filter graphs.
+
+    FFmpeg filter option syntax treats characters like ' ; [ ] as special.
+    Replacing them in job folder names avoids escaping issues in filter paths.
+
+    Args:
+        name: Original filename (without extension)
+
+    Returns:
+        Sanitized filename safe for use in FFmpeg filter graph paths
+    """
+    # Replace characters that are special in FFmpeg filter option/graph syntax
+    return re.sub(r"[';\[\]]", "_", name)
 
 
 def make_relative_path(path: Path, cwd: Path | None) -> str:
