@@ -516,6 +516,7 @@ def run_vmaf(
         log.error(
             "Failed to parse VMAF JSON (%s): File not found. Error: %s", log_path, e
         )
+
         return VMAFResult(
             mean=float("nan"),
             harmonic_mean=float("nan"),
@@ -525,6 +526,7 @@ def run_vmaf(
         )
     except Exception as e:
         log.warning("Failed to parse VMAF JSON (%s): %s", log_path, e)
+
         return VMAFResult(
             mean=float("nan"),
             harmonic_mean=float("nan"),
